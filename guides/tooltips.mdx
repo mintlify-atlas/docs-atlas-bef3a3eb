@@ -1,0 +1,300 @@
+---
+title: "Building Custom Tooltips in Lightweight Charts"
+sidebarTitle: "Tooltips"
+description: "Create floating or tracking HTML tooltips using the crosshairMove event, MouseEventParams, and seriesData to display price and time on hover."
+---
+
+Lightweight Charts does not ship a built-in tooltip component, but it exposes a rich crosshair event system that makes it straightforward to build one yourself. The core idea is to create a regular HTML element inside the chart's container div, keep it hidden by default, and then show and reposition it every time the crosshair moves. This approach gives you full control over styling, content, and positioning.
+
+## How tooltips work
+
+When the user moves the mouse over the chart, the library fires a `crosshairMove` event. You subscribe to it with `chart.subscribeCrosshairMove(handler)`. The handler receives a `MouseEventParams` object containing:
+
+| Property | Type | Description |
+|---|---|---|
+| `param.point` | `{ x, y }` | Cursor position in pixels, relative to the chart's top-left corner. `undefined` when the cursor leaves the chart. |
+| `param.time` | `Time` \| `undefined` | The time value at the crosshair position. `undefined` when outside the data range. |
+| `param.seriesData` | `Map<ISeriesApi, DataPoint>` | A map from each series to its data at the current crosshair time. |
+
+## Basic floating tooltip
+
+<Steps>
+
+### Create the tooltip element
+
+Add a `div` inside the same container that holds the chart. Position it `absolute` so it floats above the canvas.
+
+```javascript
+const container = document.getElementById('chart-container');
+
+// Create chart inside container
+const chart = createChart(container, { width: 800, height: 400 });
+const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+series.setData(data);
+
+// Create tooltip element inside the same container
+const toolTip = document.createElement('div');
+toolTip.style.cssText = `
+  position: absolute;
+  display: none;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #e0e3eb;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+`;
+container.appendChild(toolTip);
+```
+
+<Note>
+  The container must have `position: relative` (or any non-`static` position) so the `absolute`-positioned tooltip is contained within it rather than the viewport.
+
+  ```javascript
+  container.style.position = 'relative';
+  ```
+</Note>
+
+### Subscribe to crosshairMove
+
+Show the tooltip when valid data is available, hide it otherwise:
+
+```javascript
+chart.subscribeCrosshairMove((param) => {
+  if (
+    !param.point ||
+    !param.time ||
+    param.point.x < 0 ||
+    param.point.y < 0
+  ) {
+    toolTip.style.display = 'none';
+    return;
+  }
+
+  const data = param.seriesData.get(series);
+  if (!data) {
+    toolTip.style.display = 'none';
+    return;
+  }
+
+  // data.value for line/area/histogram series
+  // data.close for candlestick/bar series
+  const price = data.value !== undefined ? data.value : data.close;
+
+  toolTip.style.display = 'block';
+  toolTip.innerHTML = `
+    <div style="color: #666; margin-bottom: 4px;">${param.time}</div>
+    <div style="font-weight: bold; font-size: 14px;">$${price.toFixed(2)}</div>
+  `;
+
+  toolTip.style.left = param.point.x + 'px';
+  toolTip.style.top  = param.point.y + 'px';
+});
+```
+
+### Prevent tooltip from overflowing
+
+Clamp the tooltip position so it stays inside the container:
+
+```javascript
+chart.subscribeCrosshairMove((param) => {
+  if (!param.point || !param.time) {
+    toolTip.style.display = 'none';
+    return;
+  }
+
+  const data = param.seriesData.get(series);
+  if (!data) return;
+
+  const price = data.value !== undefined ? data.value : data.close;
+  const tooltipWidth  = 120;
+  const tooltipHeight = 60;
+  const margin        = 12;
+
+  let left = param.point.x + margin;
+  if (left + tooltipWidth > container.clientWidth) {
+    left = param.point.x - tooltipWidth - margin;
+  }
+
+  let top = param.point.y + margin;
+  if (top + tooltipHeight > container.clientHeight) {
+    top = param.point.y - tooltipHeight - margin;
+  }
+
+  toolTip.style.display = 'block';
+  toolTip.style.left    = left + 'px';
+  toolTip.style.top     = top  + 'px';
+  toolTip.innerHTML     = `
+    <div style="color: #666;">${param.time}</div>
+    <div style="font-weight: bold;">$${price.toFixed(2)}</div>
+  `;
+});
+```
+
+</Steps>
+
+## Tooltip patterns
+
+There are three common tooltip styles, each suiting different use cases:
+
+<Tabs>
+  <Tab title="Floating Tooltip">
+    The tooltip follows the data point position. Use `series.priceToCoordinate()` to convert the price to a canvas Y coordinate so the tooltip sits next to the actual bar, not the cursor.
+
+    ```javascript
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time) {
+        toolTip.style.display = 'none';
+        return;
+      }
+
+      const data = param.seriesData.get(series);
+      if (!data) return;
+
+      const price = data.value !== undefined ? data.value : data.close;
+
+      // Align tooltip with the data point, not the raw cursor Y
+      const y = series.priceToCoordinate(price);
+      if (y === null) return;
+
+      const margin = 12;
+      let left = param.point.x + margin;
+      if (left + 120 > container.clientWidth) {
+        left = param.point.x - 120 - margin;
+      }
+
+      toolTip.style.display = 'block';
+      toolTip.style.left    = left + 'px';
+      toolTip.style.top     = (y - 30) + 'px';
+      toolTip.innerHTML     = `<strong>$${price.toFixed(2)}</strong><br/>${param.time}`;
+    });
+    ```
+  </Tab>
+  <Tab title="Tracking Tooltip">
+    The tooltip follows the mouse cursor directly, using `param.point.x` and `param.point.y` without conversion.
+
+    ```javascript
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time) {
+        toolTip.style.display = 'none';
+        return;
+      }
+
+      const data = param.seriesData.get(series);
+      if (!data) return;
+
+      const price = data.value !== undefined ? data.value : data.close;
+
+      toolTip.style.display = 'block';
+      toolTip.style.left    = param.point.x + 16 + 'px';
+      toolTip.style.top     = param.point.y - 30 + 'px';
+      toolTip.innerHTML     = `
+        <div>${param.time}</div>
+        <div><strong>$${price.toFixed(2)}</strong></div>
+      `;
+    });
+    ```
+  </Tab>
+  <Tab title="Fixed Header Tooltip">
+    The tooltip stays at the top of the chart while the crosshair line follows the cursor. Good for compact layouts.
+
+    ```javascript
+    const toolTip = document.createElement('div');
+    toolTip.style.cssText = `
+      position: absolute;
+      top: 8px;
+      left: 0;
+      right: 0;
+      display: none;
+      text-align: center;
+      font-size: 13px;
+      pointer-events: none;
+    `;
+    container.appendChild(toolTip);
+
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.point || !param.time) {
+        toolTip.style.display = 'none';
+        return;
+      }
+
+      const data = param.seriesData.get(series);
+      if (!data) return;
+
+      const price = data.value !== undefined ? data.value : data.close;
+
+      toolTip.style.display = 'block';
+      toolTip.innerHTML = `${param.time} &nbsp;|&nbsp; <strong>$${price.toFixed(2)}</strong>`;
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Multiple series tooltips
+
+When the chart has several series, iterate `param.seriesData` to display all values:
+
+```javascript
+chart.subscribeCrosshairMove((param) => {
+  if (!param.point || !param.time) {
+    toolTip.style.display = 'none';
+    return;
+  }
+
+  let html = `<div style="font-weight:bold;margin-bottom:6px;">${param.time}</div>`;
+  let hasData = false;
+
+  param.seriesData.forEach((data, seriesInstance) => {
+    const price = data.value !== undefined ? data.value : data.close;
+    if (price !== undefined) {
+      html += `<div>$${price.toFixed(2)}</div>`;
+      hasData = true;
+    }
+  });
+
+  if (!hasData) {
+    toolTip.style.display = 'none';
+    return;
+  }
+
+  toolTip.style.display = 'block';
+  toolTip.style.left    = param.point.x + 16 + 'px';
+  toolTip.style.top     = param.point.y + 'px';
+  toolTip.innerHTML     = html;
+});
+```
+
+## Unsubscribing
+
+Clean up the event handler when you're done with the chart:
+
+```javascript
+const handler = (param) => { /* ... */ };
+chart.subscribeCrosshairMove(handler);
+
+// Later, when tearing down:
+chart.unsubscribeCrosshairMove(handler);
+```
+
+<Tip>
+  In React, call `chart.unsubscribeCrosshairMove(handler)` inside the `useEffect` cleanup function (before `chart.remove()`). In Vue, do the same inside `onUnmounted`.
+</Tip>
+
+## API reference
+
+<CardGroup cols={2}>
+  <Card title="subscribeCrosshairMove" icon="bolt" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/IChartApi#subscribecrosshairmove">
+    Subscribe to crosshair move events on a chart instance.
+  </Card>
+  <Card title="MouseEventParams" icon="database" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/MouseEventParams">
+    The event parameter passed to crosshair and click handlers.
+  </Card>
+  <Card title="priceToCoordinate" icon="arrow-up-right-dots" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/ISeriesApi#pricetocoordinate">
+    Convert a price value to a canvas Y coordinate.
+  </Card>
+  <Card title="Point interface" icon="location-dot" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/Point">
+    The x/y pixel coordinates returned in event params.
+  </Card>
+</CardGroup>

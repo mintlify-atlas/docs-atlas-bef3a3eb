@@ -1,47 +1,193 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Quickstart: Build Your First Lightweight Chart"
+sidebarTitle: "Quickstart"
+description: "Go from zero to a rendered interactive line chart in under five minutes using Lightweight Charts™ — covers install, chart init, series setup, and data loading."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This quickstart walks you through everything you need to render your first interactive financial chart with Lightweight Charts™. By the end you will have installed the package, initialized a chart, added a `LineSeries`, loaded data, and fit the time scale to the viewport.
 
 ## Prerequisites
 
-Before you begin, you must have:
+Before you start, confirm the following:
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+- **Browser target**: Lightweight Charts targets the [ES2020 language specification](https://262.ecma-international.org/11.0/). Your users' browsers must support ES2020. Check the [compatibility table](https://compat-table.github.io/compat-table/es2016plus/) if you need to support older environments, and see the [Installation](/installation) page for Babel transpilation guidance.
+- **Runtime**: Lightweight Charts is a **client-side** library only. It is not designed to run in Node.js or other server-side runtimes.
+- **Package manager**: npm, yarn, or pnpm (or use the CDN — see step 1 below).
 
-## Get started
+## Step-by-Step Setup
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Install the package">
+    Add the `lightweight-charts` npm package to your project:
 
-    ```bash
-    npm install your-package
+    <CodeGroup>
+      ```bash npm
+      npm install lightweight-charts
+      ```
+
+      ```bash yarn
+      yarn add lightweight-charts
+      ```
+
+      ```bash pnpm
+      pnpm add lightweight-charts
+      ```
+    </CodeGroup>
+
+    <Note>
+      Prefer a script tag over a bundler? Skip ahead to the [CDN usage](#cdn-usage) section at the bottom of this page.
+    </Note>
+  </Step>
+
+  <Step title="Import createChart and a series type">
+    Import `createChart` (the chart factory) and `LineSeries` (the series descriptor) from the package. All six built-in series types — `LineSeries`, `AreaSeries`, `BarSeries`, `CandlestickSeries`, `BaselineSeries`, and `HistogramSeries` — are available as named exports.
+
+    ```typescript
+    import { createChart, LineSeries } from 'lightweight-charts';
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
+  <Step title="Add a container element">
+    Lightweight Charts renders into any block-level DOM element you provide. Add a `<div>` to your HTML and give it an explicit size, or size it via CSS:
+
+    ```html
+    <div id="container" style="width: 800px; height: 400px;"></div>
+    ```
+
+    <Tip>
+      The chart will resize to fill the container's dimensions at creation time. To make the chart responsive after creation, call `chart.applyOptions({ width, height })` or use a `ResizeObserver`.
+    </Tip>
+  </Step>
+
+  <Step title="Initialize the chart">
+    Call `createChart()` with the container element and an options object. The function returns an `IChartApi` instance you use for all further interactions.
+
+    ```typescript
+    const chart = createChart(document.getElementById('container'), {
+      width: 800,
+      height: 400,
+      layout: {
+        background: { color: '#ffffff' },
+        textColor: '#333',
+      },
+    });
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
+  <Step title="Add a LineSeries">
+    Call `chart.addSeries()` with the series descriptor and any series-level options. This returns an `ISeriesApi` instance you use to load and update data.
+
+    ```typescript
+    const lineSeries = chart.addSeries(LineSeries, { color: '#2962ff' });
+    ```
+
+    The second argument is optional — any option you pass here overrides the series default. See the [Series Types](https://tradingview.github.io/lightweight-charts/docs/series-types) reference for the full options set for each type.
+  </Step>
+
+  <Step title="Load data with setData()">
+    Call `setData()` on the series with an array of `{ time, value }` objects. The `time` field accepts ISO 8601 date strings, Unix timestamps (number), or `{ year, month, day }` business-day objects.
+
+    ```typescript
+    lineSeries.setData([
+      { time: '2024-01-01', value: 80.01 },
+      { time: '2024-01-02', value: 96.63 },
+      { time: '2024-01-03', value: 76.64 },
+      { time: '2024-01-04', value: 81.89 },
+      { time: '2024-01-05', value: 74.43 },
+      { time: '2024-01-06', value: 80.01 },
+      { time: '2024-01-07', value: 96.63 },
+    ]);
+    ```
+  </Step>
+
+  <Step title="Fit the time scale">
+    Call `chart.timeScale().fitContent()` to zoom the x-axis so all loaded data points are visible in the viewport:
+
+    ```typescript
+    chart.timeScale().fitContent();
     ```
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Full Working Example
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+Here is a complete, self-contained TypeScript file combining all the steps above:
+
+```typescript
+import { createChart, LineSeries } from 'lightweight-charts';
+
+// 1. Initialise the chart
+const chart = createChart(document.getElementById('container'), {
+  width: 800,
+  height: 400,
+  layout: {
+    background: { color: '#ffffff' },
+    textColor: '#333',
+  },
+});
+
+// 2. Add a line series
+const lineSeries = chart.addSeries(LineSeries, { color: '#2962ff' });
+
+// 3. Load data
+lineSeries.setData([
+  { time: '2024-01-01', value: 80.01 },
+  { time: '2024-01-02', value: 96.63 },
+  { time: '2024-01-03', value: 76.64 },
+  { time: '2024-01-04', value: 81.89 },
+  { time: '2024-01-05', value: 74.43 },
+  { time: '2024-01-06', value: 80.01 },
+  { time: '2024-01-07', value: 96.63 },
+]);
+
+// 4. Fit all data into view
+chart.timeScale().fitContent();
+```
+
+## CDN Usage
+
+If you are not using a bundler, you can load Lightweight Charts from [unpkg](https://unpkg.com/) with a `<script>` tag. The standalone build bundles all dependencies and exposes a global `LightweightCharts` object on `window`:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  </head>
+  <body>
+    <div id="container" style="width: 800px; height: 400px;"></div>
+    <script>
+      const chart = LightweightCharts.createChart(
+        document.getElementById('container'),
+        { width: 800, height: 400 }
+      );
+
+      const lineSeries = chart.addSeries(LightweightCharts.LineSeries, {
+        color: '#2962ff',
+      });
+
+      lineSeries.setData([
+        { time: '2024-01-01', value: 80.01 },
+        { time: '2024-01-02', value: 96.63 },
+        { time: '2024-01-03', value: 76.64 },
+        { time: '2024-01-04', value: 81.89 },
+        { time: '2024-01-05', value: 74.43 },
+        { time: '2024-01-06', value: 80.01 },
+        { time: '2024-01-07', value: 96.63 },
+      ]);
+
+      chart.timeScale().fitContent();
+    </script>
+  </body>
+</html>
+```
+
+<Note>
+  The CDN URL above always resolves to the **latest published version**. Pin a specific version in production by including it in the URL, for example: `https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js`
+</Note>
+
+## What's Next?
+
+- **[Installation](/installation)** — Full details on build variants, TypeScript setup, and Babel transpilation.
+- **[Series Types](https://tradingview.github.io/lightweight-charts/docs/series-types)** — Learn the data format and options for all six built-in series.
+- **[API Reference](https://tradingview.github.io/lightweight-charts/docs/api)** — Complete reference for `IChartApi`, `ISeriesApi`, and all option interfaces.

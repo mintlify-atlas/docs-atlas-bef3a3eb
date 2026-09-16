@@ -1,0 +1,558 @@
+---
+title: "ChartOptions: Complete Configuration Reference"
+sidebarTitle: "Chart Options"
+description: "All configurable properties of ChartOptions — layout, grid, crosshair, price scales, time scale, scroll/scale behavior, and responsive sizing."
+---
+
+`ChartOptions` (aliased from `TimeChartOptions`) is the top-level configuration
+object you pass to `createChart`. Every property is optional at construction
+time; pass only what you want to change from the defaults. The same object
+shape is also accepted by `chart.applyOptions()` to change settings at runtime.
+Nested objects are deep-merged, so you can update a single sub-property without
+repeating the entire tree.
+
+---
+
+## Sizing
+
+<ParamField path="width" type="number" default="0">
+  Chart width in pixels. When `0` (the default), the library calculates the
+  width from the container element's computed size. Ignored when `autoSize` is
+  active and `ResizeObserver` is available.
+</ParamField>
+
+<ParamField path="height" type="number" default="0">
+  Chart height in pixels. Same zero-means-auto semantics as `width`.
+</ParamField>
+
+<ParamField path="autoSize" type="boolean" default="false">
+  When `true`, the chart installs a `ResizeObserver` on its container and
+  automatically resizes whenever the container dimensions change. Requires the
+  `ResizeObserver` API to be available in the global scope; if it is absent, a
+  console warning is shown and the flag is silently ignored.
+
+  ```javascript
+  const chart = createChart(container, { autoSize: true });
+  ```
+</ParamField>
+
+---
+
+## Layout Options
+
+All properties live under the `layout` key.
+
+<ParamField path="layout.background" type="SolidColor | VerticalGradientColor" default='{ type: "solid", color: "#FFFFFF" }'>
+  Background color of the chart canvas and scales. Two variants are supported:
+
+  <Expandable title="SolidColor">
+    ```typescript
+    { type: 'solid', color: string }
+    ```
+    A flat color specified as any valid CSS color string.
+  </Expandable>
+
+  <Expandable title="VerticalGradientColor">
+    ```typescript
+    { type: 'gradient', topColor: string, bottomColor: string }
+    ```
+    A top-to-bottom linear gradient. The library interpolates between the two
+    colors for intermediate y-positions.
+  </Expandable>
+
+  ```javascript
+  // Solid dark background
+  layout: { background: { type: 'solid', color: '#131722' } }
+
+  // Vertical gradient
+  layout: { background: { type: 'gradient', topColor: '#1a1a2e', bottomColor: '#16213e' } }
+  ```
+</ParamField>
+
+<ParamField path="layout.textColor" type="string" default='"#191919"'>
+  Color of all scale label text. Accepts any CSS color string.
+</ParamField>
+
+<ParamField path="layout.fontSize" type="number" default="12">
+  Font size in pixels for scale labels.
+</ParamField>
+
+<ParamField path="layout.fontFamily" type="string" default="-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif">
+  Font family string applied to all scale label text.
+</ParamField>
+
+<ParamField path="layout.attributionLogo" type="boolean" default="true">
+  Controls visibility of the TradingView attribution logo on the main chart
+  pane. The library's licence requires an attribution notice; displaying this
+  logo satisfies that requirement. You may set this to `false` only if you
+  independently fulfil the attribution requirement (e.g. a visible link to
+  `tradingview.com` on the page).
+</ParamField>
+
+<ParamField path="layout.panes" type="LayoutPanesOptions">
+  Options that affect pane separators and resizing behaviour.
+
+  <Expandable title="LayoutPanesOptions fields">
+    <ParamField path="enableResize" type="boolean" default="true">
+      Allow users to drag pane separators to resize panes.
+    </ParamField>
+    <ParamField path="separatorColor" type="string" default='"#2B2B43"'>
+      Color of the horizontal line between adjacent panes.
+    </ParamField>
+    <ParamField path="separatorHoverColor" type="string" default='"rgba(178, 181, 189, 0.2)"'>
+      Background color applied to the separator strip when the user hovers
+      over it.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="layout.colorSpace" type='"srgb" | "display-p3"' default='"srgb"'>
+  Color space of the internal canvas contexts. Set to `'display-p3'` for wide
+  gamut rendering on supported hardware.
+
+  <Note>
+    This option must be set at chart creation time. Changing it via
+    `applyOptions` after the chart has been created has no effect.
+  </Note>
+</ParamField>
+
+---
+
+## Grid Options
+
+Configure the background grid under the `grid` key.
+
+<ParamField path="grid.vertLines" type="GridLineOptions">
+  Options for the vertical grid lines drawn at each time-scale tick.
+
+  <Expandable title="GridLineOptions fields">
+    <ParamField path="color" type="string" default='"#D6DCDE"'>
+      Line color.
+    </ParamField>
+    <ParamField path="style" type="LineStyle" default="LineStyle.Solid">
+      Line dash style. Values from the `LineStyle` enum: `Solid` (0),
+      `Dotted` (1), `Dashed` (2), `LargeDashed` (3), `SparseDotted` (4).
+    </ParamField>
+    <ParamField path="visible" type="boolean" default="true">
+      Show or hide vertical grid lines.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="grid.horzLines" type="GridLineOptions">
+  Options for the horizontal grid lines drawn at each price-scale tick. Same
+  fields as `vertLines`.
+</ParamField>
+
+```javascript
+grid: {
+  vertLines: { color: '#2B2B43', style: LineStyle.Dashed },
+  horzLines: { color: '#2B2B43', style: LineStyle.Dashed },
+}
+```
+
+---
+
+## Crosshair Options
+
+The crosshair is the pair of intersecting lines that follow the cursor. Configure
+it under the `crosshair` key.
+
+<ParamField path="crosshair.mode" type="CrosshairMode" default="CrosshairMode.Magnet">
+  Controls how the crosshair horizontal line snaps to data.
+
+  | Value | Number | Behaviour |
+  |-------|--------|-----------|
+  | `CrosshairMode.Normal` | `0` | Crosshair moves freely with the cursor |
+  | `CrosshairMode.Magnet` | `1` | Horizontal line snaps to the close (or single value) of the nearest series |
+  | `CrosshairMode.Hidden` | `2` | Crosshair rendering is disabled entirely |
+  | `CrosshairMode.MagnetOHLC` | `3` | Snaps to open, high, low, or close — whichever is nearest |
+</ParamField>
+
+<ParamField path="crosshair.vertLine" type="CrosshairLineOptions">
+  Style of the vertical crosshair line.
+
+  <Expandable title="CrosshairLineOptions fields">
+    <ParamField path="color" type="string" default='"#758696"'>
+      Line color.
+    </ParamField>
+    <ParamField path="width" type="LineWidth" default="1">
+      Line width in pixels (1–4).
+    </ParamField>
+    <ParamField path="style" type="LineStyle" default="LineStyle.LargeDashed">
+      Dash style.
+    </ParamField>
+    <ParamField path="visible" type="boolean" default="true">
+      Show or hide this crosshair line.
+    </ParamField>
+    <ParamField path="labelVisible" type="boolean" default="true">
+      Show the axis label at the intersection point.
+    </ParamField>
+    <ParamField path="labelBackgroundColor" type="string" default='"#4c525e"'>
+      Background color of the axis label bubble.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="crosshair.horzLine" type="CrosshairLineOptions">
+  Style of the horizontal crosshair line. Same fields as `vertLine`.
+</ParamField>
+
+<ParamField path="crosshair.doNotSnapToHiddenSeriesIndices" type="boolean" default="false">
+  When `true`, the crosshair will not snap to the time indices of hidden series.
+</ParamField>
+
+```javascript
+crosshair: {
+  mode: CrosshairMode.Normal,
+  vertLine: {
+    color: '#9B7DFF',
+    width: 1,
+    style: LineStyle.Dashed,
+    labelVisible: true,
+    labelBackgroundColor: '#9B7DFF',
+  },
+  horzLine: {
+    color: '#9B7DFF',
+    labelBackgroundColor: '#9B7DFF',
+  },
+}
+```
+
+---
+
+## Price Scale Options
+
+Both `leftPriceScale` and `rightPriceScale` share the same `PriceScaleOptions`
+shape. An additional `overlayPriceScales` key controls defaults for overlay
+(floating) scales.
+
+<ParamField path="rightPriceScale.visible" type="boolean" default="true">
+  Show the right price scale. The left scale is hidden by default.
+</ParamField>
+
+<ParamField path="leftPriceScale.visible" type="boolean" default="false">
+  Show the left price scale.
+</ParamField>
+
+<ParamField path="rightPriceScale.mode" type="PriceScaleMode" default="PriceScaleMode.Normal">
+  Price scale display mode.
+
+  | Value | Number | Behaviour |
+  |-------|--------|-----------|
+  | `PriceScaleMode.Normal` | `0` | Linear price axis |
+  | `PriceScaleMode.Logarithmic` | `1` | Logarithmic price axis |
+  | `PriceScaleMode.Percentage` | `2` | Shows % change relative to the first visible bar |
+  | `PriceScaleMode.IndexedTo100` | `3` | Same as Percentage but the base value is 100 |
+</ParamField>
+
+<ParamField path="rightPriceScale.autoScale" type="boolean" default="true">
+  Automatically fit the price range to the visible data. Overlay price scales
+  are always auto-scaled.
+</ParamField>
+
+<ParamField path="rightPriceScale.invertScale" type="boolean" default="false">
+  Flip the scale so that higher prices appear at the bottom.
+</ParamField>
+
+<ParamField path="rightPriceScale.scaleMargins" type="PriceScaleMargins" default='{ top: 0.2, bottom: 0.1 }'>
+  Fractional margins (0–1) added above and below the data when auto-scaling.
+  Increase `top` to leave room for labels or indicators.
+
+  <Expandable title="PriceScaleMargins fields">
+    <ParamField path="top" type="number">
+      Top margin as a fraction of pane height (e.g. `0.1` = 10 %).
+    </ParamField>
+    <ParamField path="bottom" type="number">
+      Bottom margin as a fraction of pane height.
+    </ParamField>
+  </Expandable>
+
+  ```javascript
+  chart.priceScale('right').applyOptions({
+    scaleMargins: { top: 0.1, bottom: 0.05 },
+  });
+  ```
+</ParamField>
+
+<ParamField path="rightPriceScale.borderVisible" type="boolean" default="true">
+  Draw the border line between the price scale and the chart area.
+</ParamField>
+
+<ParamField path="rightPriceScale.borderColor" type="string" default='"#2B2B43"'>
+  Color of the price scale border.
+</ParamField>
+
+<ParamField path="rightPriceScale.textColor" type="string | undefined" default="undefined">
+  Override the label text color for this scale. Falls back to
+  `layout.textColor` when `undefined`.
+</ParamField>
+
+<ParamField path="rightPriceScale.alignLabels" type="boolean" default="true">
+  Prevent price labels from overlapping by shifting them vertically.
+</ParamField>
+
+<ParamField path="rightPriceScale.ticksVisible" type="boolean" default="false">
+  Draw small horizontal tick marks alongside price labels.
+</ParamField>
+
+<ParamField path="rightPriceScale.entireTextOnly" type="boolean" default="false">
+  Show corner labels only when the full text fits within the scale.
+</ParamField>
+
+<ParamField path="rightPriceScale.minimumWidth" type="number" default="0">
+  Minimum pixel width for the price scale panel. Useful for aligning vertically
+  stacked charts.
+</ParamField>
+
+<ParamField path="rightPriceScale.tickMarkDensity" type="number" default="2.5">
+  Controls label spacing. Higher values produce fewer, more spread-out labels.
+</ParamField>
+
+<ParamField path="defaultVisiblePriceScaleId" type='"left" | "right"' default='"right"'>
+  The preferred side when both scales share the same visibility state. Affects
+  grid-line generation, overlay label placement, and the default scale for new
+  series added without an explicit `priceScaleId`.
+</ParamField>
+
+---
+
+## Time Scale Options
+
+Configure the horizontal axis under the `timeScale` key.
+
+<ParamField path="timeScale.rightOffset" type="number" default="0">
+  Empty space in bars shown to the right of the last data point.
+</ParamField>
+
+<ParamField path="timeScale.rightOffsetPixels" type="number | undefined" default="undefined">
+  Same as `rightOffset` but expressed in pixels. Takes priority over
+  `rightOffset` when set.
+</ParamField>
+
+<ParamField path="timeScale.barSpacing" type="number" default="6">
+  Horizontal distance between bar centres in pixels.
+</ParamField>
+
+<ParamField path="timeScale.minBarSpacing" type="number" default="0.5">
+  Minimum bar spacing in pixels. Users cannot zoom out beyond this density.
+</ParamField>
+
+<ParamField path="timeScale.maxBarSpacing" type="number" default="0">
+  Maximum bar spacing in pixels. `0` means no upper limit.
+</ParamField>
+
+<ParamField path="timeScale.fixLeftEdge" type="boolean" default="false">
+  Prevent scrolling past the first data point on the left.
+</ParamField>
+
+<ParamField path="timeScale.fixRightEdge" type="boolean" default="false">
+  Prevent scrolling past the most recent data point on the right.
+</ParamField>
+
+<ParamField path="timeScale.lockVisibleTimeRangeOnResize" type="boolean" default="false">
+  Keep the visible time range constant when the chart is resized.
+</ParamField>
+
+<ParamField path="timeScale.rightBarStaysOnScroll" type="boolean" default="false">
+  Keep the bar under the cursor in place while scrolling.
+</ParamField>
+
+<ParamField path="timeScale.borderVisible" type="boolean" default="true">
+  Show the border line between the time scale and the chart area.
+</ParamField>
+
+<ParamField path="timeScale.borderColor" type="string" default='"#2B2B43"'>
+  Color of the time scale border.
+</ParamField>
+
+<ParamField path="timeScale.visible" type="boolean" default="true">
+  Show the entire time scale. Set to `false` to hide the axis completely.
+</ParamField>
+
+<ParamField path="timeScale.timeVisible" type="boolean" default="false">
+  Show time-of-day in tick labels and the vertical crosshair label. When
+  `false`, only the date is shown.
+</ParamField>
+
+<ParamField path="timeScale.secondsVisible" type="boolean" default="true">
+  Include seconds (`hh:mm:ss`) in intraday labels when `timeVisible` is `true`.
+</ParamField>
+
+<ParamField path="timeScale.shiftVisibleRangeOnNewBar" type="boolean" default="true">
+  Scroll the visible range right when a new bar appears at the right edge,
+  keeping the latest bar in view.
+</ParamField>
+
+<ParamField path="timeScale.ticksVisible" type="boolean" default="false">
+  Draw small vertical tick marks alongside time labels.
+</ParamField>
+
+<ParamField path="timeScale.uniformDistribution" type="boolean" default="false">
+  When `true`, tick marks of the same weight are either all drawn or all hidden,
+  preventing a mix of label densities.
+</ParamField>
+
+<ParamField path="timeScale.minimumHeight" type="number" default="0">
+  Minimum pixel height for the time scale panel. Useful for aligning
+  horizontally stacked charts.
+</ParamField>
+
+<ParamField path="timeScale.allowBoldLabels" type="boolean" default="true">
+  Render major time labels (e.g. month or year boundaries) in bold.
+</ParamField>
+
+<ParamField path="timeScale.tickMarkFormatter" type="(time, tickMarkType, locale) => string">
+  Custom function for formatting tick mark labels. Available on
+  `TimeChartOptions` (the standard time-based chart). Signature:
+  ```typescript
+  (time: Time, tickMarkType: TickMarkType, locale: string) => string
+  ```
+</ParamField>
+
+---
+
+## Scroll and Scale Interaction
+
+<ParamField path="handleScroll" type="HandleScrollOptions | boolean" default="true">
+  Enable or disable user scrolling. Pass `false` to disable all scrolling, or
+  provide a `HandleScrollOptions` object for fine-grained control.
+
+  <Expandable title="HandleScrollOptions fields">
+    <ParamField path="mouseWheel" type="boolean" default="true">
+      Scroll with the mouse wheel.
+    </ParamField>
+    <ParamField path="pressedMouseMove" type="boolean" default="true">
+      Scroll by holding the left mouse button and dragging.
+    </ParamField>
+    <ParamField path="horzTouchDrag" type="boolean" default="true">
+      Horizontal touch swipe scrolling (intercepts default browser scroll).
+    </ParamField>
+    <ParamField path="vertTouchDrag" type="boolean" default="true">
+      Vertical touch swipe scrolling.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="handleScale" type="HandleScaleOptions | boolean" default="true">
+  Enable or disable user zooming. Pass `false` to disable all scaling.
+
+  <Expandable title="HandleScaleOptions fields">
+    <ParamField path="mouseWheel" type="boolean" default="true">
+      Zoom with the mouse wheel.
+    </ParamField>
+    <ParamField path="pinch" type="boolean" default="true">
+      Zoom with pinch gestures on touch devices.
+    </ParamField>
+    <ParamField path="axisPressedMouseMove" type="AxisPressedMouseMoveOptions | boolean" default="true">
+      Scale axes by clicking and dragging directly on them.
+      Pass an object `{ time: boolean, price: boolean }` for axis-level control.
+    </ParamField>
+    <ParamField path="axisDoubleClickReset" type="AxisDoubleClickOptions | boolean" default="true">
+      Reset scale to auto-fit by double-clicking an axis.
+      Pass an object `{ time: boolean, price: boolean }` for axis-level control.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="kineticScroll" type="KineticScrollOptions">
+  Momentum scrolling after the user releases a drag gesture.
+
+  <Expandable title="KineticScrollOptions fields">
+    <ParamField path="touch" type="boolean" default="true">
+      Enable kinetic (momentum) scrolling for touch gestures.
+    </ParamField>
+    <ParamField path="mouse" type="boolean" default="false">
+      Enable kinetic scrolling for mouse drags.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+## Other Top-Level Options
+
+<ParamField path="addDefaultPane" type="boolean" default="true">
+  Create the initial pane automatically. Set to `false` when you want to add
+  panes manually via `chart.addPane()`.
+</ParamField>
+
+<ParamField path="hoveredSeriesOnTop" type="boolean" default="true">
+  Temporarily draw the hovered series on top of all other series in the same
+  pane while the cursor is over it. Does not change the stored series order.
+</ParamField>
+
+<ParamField path="defaultVisiblePriceScaleId" type='"left" | "right"' default='"right"'>
+  Preferred default price scale side used for auto-assignment and grid lines.
+</ParamField>
+
+<ParamField path="trackingMode.exitMode" type="TrackingModeExitMode" default="TrackingModeExitMode.OnNextTap">
+  Controls how tracking mode (long-press crosshair on mobile) is deactivated.
+  `OnNextTap` (default) requires a second tap; `OnTouchEnd` exits on finger
+  release.
+</ParamField>
+
+---
+
+## Full Example
+
+```typescript
+import {
+  createChart,
+  ColorType,
+  CrosshairMode,
+  LineStyle,
+  PriceScaleMode,
+} from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container')!, {
+  // Sizing
+  autoSize: true,
+
+  // Layout
+  layout: {
+    background: { type: ColorType.Solid, color: '#131722' },
+    textColor: '#d1d4dc',
+    fontSize: 12,
+    attributionLogo: true,
+    panes: { enableResize: true, separatorColor: '#2B2B43' },
+  },
+
+  // Grid
+  grid: {
+    vertLines: { color: '#2B2B43', style: LineStyle.Solid },
+    horzLines: { color: '#2B2B43', style: LineStyle.Solid },
+  },
+
+  // Crosshair
+  crosshair: {
+    mode: CrosshairMode.Magnet,
+    vertLine: { color: '#758696', labelBackgroundColor: '#4c525e' },
+    horzLine: { color: '#758696', labelBackgroundColor: '#4c525e' },
+  },
+
+  // Price scales
+  rightPriceScale: {
+    visible: true,
+    borderColor: '#2B2B43',
+    mode: PriceScaleMode.Normal,
+    scaleMargins: { top: 0.1, bottom: 0.1 },
+  },
+  leftPriceScale: { visible: false },
+
+  // Time scale
+  timeScale: {
+    borderColor: '#2B2B43',
+    timeVisible: true,
+    secondsVisible: false,
+    rightOffset: 5,
+    barSpacing: 8,
+    fixRightEdge: false,
+  },
+
+  // Interaction
+  handleScroll: { mouseWheel: true, pressedMouseMove: true },
+  handleScale: { mouseWheel: true, pinch: true },
+  kineticScroll: { touch: true, mouse: false },
+});
+```

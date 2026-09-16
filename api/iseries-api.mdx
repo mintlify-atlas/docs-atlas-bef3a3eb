@@ -1,0 +1,467 @@
+---
+title: "ISeriesApi: Lightweight Charts Series Interface"
+sidebarTitle: "ISeriesApi"
+description: "Complete reference for ISeriesApi — manage data, options, price lines, primitives, coordinate conversion, and infinite scroll for any chart series type."
+---
+
+`ISeriesApi<TSeriesType>` is the primary handle for every series you add to a chart. It provides methods for loading and updating data, applying visual options, creating price lines, attaching rendering primitives, and converting between price/coordinate spaces. The generic parameter `TSeriesType` constrains data and option types to the specific series kind (`'Line'`, `'Candlestick'`, `'Bar'`, etc.).
+
+<Note>
+All methods are available on the same object regardless of series type. The TypeScript generics ensure that `setData`, `update`, and `options` only accept types appropriate for the series kind you created.
+</Note>
+
+---
+
+## Data Methods
+
+### setData
+
+Replaces the entire dataset for the series. The array must be ordered with earlier time points first. Any existing data is fully discarded.
+
+<ParamField body="data" type="TData[]" required>
+  Ordered array of data items. For candlestick series this is `CandlestickData[]`, for line/area/baseline/histogram series it is `SingleValueData[]`, and so on. Whitespace items (`{ time }`) are permitted within the array to create gaps.
+</ParamField>
+
+```typescript
+lineSeries.setData([
+  { time: '2024-01-08', value: 108.25 },
+  { time: '2024-01-09', value: 111.60 },
+  { time: '2024-01-10', value: 109.40 },
+]);
+
+candleSeries.setData([
+  { time: '2024-01-08', open: 106, high: 110, low: 105, close: 108 },
+  { time: '2024-01-09', open: 108, high: 114, low: 107, close: 112 },
+]);
+```
+
+---
+
+### update
+
+Appends a new bar or updates the most recent bar. If the new item's `time` equals the last item's time, the existing item is replaced; otherwise the item is appended. You may also pass `historicalUpdate: true` to modify an older bar, though this is slower than updating the latest bar.
+
+<ParamField body="bar" type="TData" required>
+  A single data item. Its `time` must be greater than or equal to the latest existing time point.
+</ParamField>
+
+<ParamField body="historicalUpdate" type="boolean">
+  When `true`, allows updating a data point that is not the most recent bar. Defaults to `false`.
+</ParamField>
+
+```typescript
+// Real-time tick update
+series.update({ time: '2024-01-10', value: 115 });
+
+// Candlestick live update
+candleSeries.update({
+  time: '2024-01-10',
+  open: 109,
+  high: 117,
+  low: 108,
+  close: 115,
+});
+```
+
+---
+
+### pop
+
+Removes one or more data items from the end of the series and returns them.
+
+<ParamField body="count" type="number" required>
+  The number of items to remove from the tail of the series.
+</ParamField>
+
+**Returns:** `TData[]` — the removed items.
+
+```typescript
+const removed = series.pop(1);
+console.log('Removed bar:', removed[0]);
+```
+
+---
+
+### dataByIndex
+
+Retrieves the original data item at a given logical index. If no bar exists at that index, the `mismatchDirection` parameter controls which neighboring bar is returned.
+
+<ParamField body="logicalIndex" type="number" required>
+  The logical (bar) index to look up.
+</ParamField>
+
+<ParamField body="mismatchDirection" type="MismatchDirection">
+  Search direction when no exact match is found. Use `MismatchDirection.NearestLeft` or `MismatchDirection.NearestRight`.
+</ParamField>
+
+**Returns:** `TData | null`
+
+```typescript
+import { MismatchDirection } from 'lightweight-charts';
+
+const bar = series.dataByIndex(42, MismatchDirection.NearestLeft);
+console.log(bar); // original data item at or just before index 42
+```
+
+---
+
+### data
+
+Returns the full array of data items as currently held by the series.
+
+**Returns:** `readonly TData[]`
+
+```typescript
+const allBars = series.data();
+console.log(`Total bars: ${allBars.length}`);
+```
+
+---
+
+### subscribeDataChanged / unsubscribeDataChanged
+
+Subscribe to an event that fires whenever `setData` or `update` is called on the series.
+
+<ParamField body="handler" type="DataChangedHandler" required>
+  A callback `(scope: DataChangedScope) => void`. `scope` is `'full'` for `setData` and `'update'` for `update`.
+</ParamField>
+
+```typescript
+function onDataChanged(scope) {
+  console.log('Data changed, scope:', scope);
+}
+series.subscribeDataChanged(onDataChanged);
+// Later:
+series.unsubscribeDataChanged(onDataChanged);
+```
+
+---
+
+## Options Methods
+
+### applyOptions
+
+Applies a partial options object to the series. Only the provided keys are changed; all others remain at their current values.
+
+<ParamField body="options" type="TPartialOptions" required>
+  A partial options object specific to the series type. For example, `LineSeriesPartialOptions` for a line series.
+</ParamField>
+
+```typescript
+lineSeries.applyOptions({ color: '#e91e63', lineWidth: 2 });
+candleSeries.applyOptions({ upColor: '#26a69a', downColor: '#ef5350' });
+```
+
+---
+
+### options
+
+Returns the full set of currently applied options, including all defaults.
+
+**Returns:** `Readonly<TOptions>`
+
+```typescript
+const opts = series.options();
+console.log(opts.color, opts.lineWidth);
+```
+
+---
+
+## Price Scale Methods
+
+### priceScale
+
+Returns the `IPriceScaleApi` for the price scale this series is currently attached to.
+
+**Returns:** `IPriceScaleApi`
+
+<Warning>
+The returned `IPriceScaleApi` is bound to the price scale at the moment of the call. If you later move the series to a different pane or price scale, you must call `priceScale()` again to get a fresh reference — the old one will not follow the series.
+</Warning>
+
+```typescript
+const ps = series.priceScale();
+ps.applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+```
+
+---
+
+### priceFormatter
+
+Returns the price formatter used by the series, which can be used to format numbers in the same way the chart does.
+
+**Returns:** `IPriceFormatter`
+
+```typescript
+const fmt = series.priceFormatter();
+console.log(fmt.format(1234.5)); // e.g. "1234.50"
+```
+
+---
+
+### priceToCoordinate
+
+Converts a price value to a canvas Y-coordinate (pixels from the top of the pane).
+
+<ParamField body="price" type="number" required>
+  The price value to convert.
+</ParamField>
+
+**Returns:** `Coordinate | null` — `null` if the price scale is not ready.
+
+```typescript
+const y = series.priceToCoordinate(100);
+console.log('Y coordinate for price 100:', y);
+```
+
+---
+
+### coordinateToPrice
+
+Converts a Y-coordinate (pixels from the top) back to a price value.
+
+<ParamField body="coordinate" type="number" required>
+  Pixel distance from the top of the pane.
+</ParamField>
+
+**Returns:** `BarPrice | null`
+
+```typescript
+const price = series.coordinateToPrice(250);
+console.log('Price at y=250px:', price);
+```
+
+---
+
+## Visibility Range
+
+### barsInLogicalRange
+
+Returns information about how many series bars exist before and after the given logical range. This is the key building block for implementing infinite scroll / lazy historical data loading.
+
+<ParamField body="range" type="IRange<number>" required>
+  The logical range to inspect, typically from `chart.timeScale().getVisibleLogicalRange()`.
+</ParamField>
+
+**Returns:** `BarsInfo<HorzScaleItem> | null`
+
+<ResponseField name="BarsInfo" type="object">
+  <Expandable title="BarsInfo properties">
+    <ResponseField name="barsBefore" type="number">
+      Number of bars before the visible range. Positive means bars exist to the left; negative means the first series bar is inside the range.
+    </ResponseField>
+    <ResponseField name="barsAfter" type="number">
+      Number of bars after the visible range. Positive means bars exist to the right; negative means the last bar is inside the range.
+    </ResponseField>
+    <ResponseField name="from" type="HorzScaleItem" optional>
+      The time of the first bar in the range, if any.
+    </ResponseField>
+    <ResponseField name="to" type="HorzScaleItem" optional>
+      The time of the last bar in the range, if any.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    // Implement infinite scroll / load more data
+    chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (!range) return;
+      const barsInfo = series.barsInLogicalRange(range);
+      if (barsInfo !== null && barsInfo.barsBefore < 10) {
+        // Fewer than 10 bars remain to the left — load more historical data
+        fetchHistoricalData().then((older) => {
+          series.setData([...older, ...series.data()]);
+        });
+      }
+    });
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
+      if (!range) return;
+      var barsInfo = series.barsInLogicalRange(range);
+      if (barsInfo !== null && barsInfo.barsBefore < 10) {
+        fetchHistoricalData().then(function(older) {
+          series.setData(older.concat(series.data()));
+        });
+      }
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Price Lines
+
+### createPriceLine
+
+Adds a horizontal price line to the chart at a given price level.
+
+<ParamField body="options" type="CreatePriceLineOptions" required>
+  <Expandable title="CreatePriceLineOptions">
+    <ResponseField name="price" type="number" required>
+      The price level where the line is drawn.
+    </ResponseField>
+    <ResponseField name="color" type="string">
+      Line color. Defaults to the series color.
+    </ResponseField>
+    <ResponseField name="lineWidth" type="number">
+      Line width in pixels.
+    </ResponseField>
+    <ResponseField name="lineStyle" type="LineStyle">
+      Line style: `0` Solid, `1` Dotted, `2` Dashed, `3` LargeDashed, `4` SparseDotted.
+    </ResponseField>
+    <ResponseField name="axisLabelVisible" type="boolean">
+      Whether to show the price label on the price axis.
+    </ResponseField>
+    <ResponseField name="title" type="string">
+      Text label displayed on the line.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `IPriceLine`
+
+```typescript
+const targetLine = series.createPriceLine({
+  price: 150.0,
+  color: '#e91e63',
+  lineWidth: 2,
+  lineStyle: 2, // LineStyle.Dashed
+  axisLabelVisible: true,
+  title: 'Target',
+});
+```
+
+---
+
+### removePriceLine
+
+Removes a price line that was previously created with `createPriceLine`.
+
+<ParamField body="line" type="IPriceLine" required>
+  The price line object returned by `createPriceLine`.
+</ParamField>
+
+```typescript
+series.removePriceLine(targetLine);
+```
+
+---
+
+### priceLines
+
+Returns the array of all price lines currently attached to the series.
+
+**Returns:** `IPriceLine[]`
+
+---
+
+## Primitives
+
+### attachPrimitive
+
+Attaches an `ISeriesPrimitive` plugin to the series, allowing you to render custom graphics in sync with the series data.
+
+<ParamField body="primitive" type="ISeriesPrimitive<HorzScaleItem>" required>
+  Any object implementing the `ISeriesPrimitive` interface.
+</ParamField>
+
+```typescript
+const myPrimitive = new MyCustomPrimitive();
+series.attachPrimitive(myPrimitive);
+```
+
+---
+
+### detachPrimitive
+
+Detaches a previously attached series primitive. Does nothing if the primitive is not currently attached.
+
+<ParamField body="primitive" type="ISeriesPrimitive<HorzScaleItem>" required>
+  The primitive instance to remove.
+</ParamField>
+
+---
+
+## Pane Management
+
+### moveToPane
+
+Moves the series to a different pane by index. If a pane at the target index does not exist, it is created automatically.
+
+<ParamField body="paneIndex" type="number" required>
+  Zero-based index of the target pane. Must be between `0` and the total number of existing panes (inclusive — a new pane is created if needed).
+</ParamField>
+
+```typescript
+// Move series to the second pane (index 1), creating it if needed
+series.moveToPane(1);
+```
+
+---
+
+### getPane
+
+Returns the `IPaneApi` for the pane the series currently belongs to.
+
+**Returns:** `IPaneApi<HorzScaleItem>`
+
+```typescript
+const pane = series.getPane();
+console.log('Pane index:', pane.paneIndex());
+```
+
+---
+
+## Series Order
+
+### seriesOrder / setSeriesOrder
+
+Gets or sets the zero-based rendering order of this series within its pane. Lower indices are rendered first (behind higher indices).
+
+<ParamField body="order" type="number">
+  Desired zero-based index for `setSeriesOrder`. Values outside the valid range are clamped.
+</ParamField>
+
+<Warning>
+Changing the series order may affect the price scale formatter — the series with the lowest index supplies the formatter for the shared price scale.
+</Warning>
+
+---
+
+## Info Methods
+
+### seriesType
+
+Returns the type string for the series.
+
+**Returns:** `TSeriesType` — e.g. `'Line'`, `'Candlestick'`, `'Bar'`, `'Area'`, `'Baseline'`, `'Histogram'`, `'Custom'`.
+
+```typescript
+console.log(lineSeries.seriesType()); // "Line"
+console.log(candleSeries.seriesType()); // "Candlestick"
+```
+
+---
+
+### lastValueData
+
+Returns metadata about the last visible value of the series.
+
+<ParamField body="globalLast" type="boolean" required>
+  If `true`, returns the absolute last value in the dataset. If `false`, returns the last value within the current visible range.
+</ParamField>
+
+**Returns:** `LastValueDataResult` — contains `noData: boolean`, `price: number`, and `color: string`.
+
+```typescript
+const last = series.lastValueData(true);
+if (!last.noData) {
+  console.log('Last price:', last.price, 'Color:', last.color);
+}
+```

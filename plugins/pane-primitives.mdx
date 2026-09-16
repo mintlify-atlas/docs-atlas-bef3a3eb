@@ -1,0 +1,184 @@
+---
+title: "Pane Primitives: Chart-Wide Overlay Plugins in Lightweight Charts"
+sidebarTitle: "Pane Primitives"
+description: "Add watermarks, backgrounds, and pane-wide overlays to Lightweight Charts using pane primitives — elements not tied to any specific series."
+---
+
+A pane primitive is a plugin attached to a chart pane rather than to any individual series. Use pane primitives for elements that belong to the pane as a whole — watermarks, background gradients, reference bands, and similar decorations that exist independently of the data. The library's own built-in text and image watermarks are implemented exactly this way. For annotations that need to interact with a series' price or time scales, use [Series primitives](/plugins/series-primitives) instead.
+
+## Key differences from series primitives
+
+Pane primitives follow the same three-layer model as series primitives (primitive → views → renderers), but with three important differences:
+
+- `paneViews()` is the **only** view getter. Pane primitives cannot draw on the price scale or time scale, and cannot define axis labels.
+- The `attached()` method receives `{ chart, requestUpdate }` — there is no `series` reference because the primitive is not bound to one.
+- There is no `autoscaleInfo()` method. Pane primitives do not influence the visible price range.
+
+## Getting a pane reference
+
+Every chart has at least one pane. Retrieve panes with `chart.panes()`:
+
+```typescript
+const chart = createChart(document.getElementById('container'));
+const firstPane = chart.panes()[0];  // main pane
+```
+
+Multi-pane charts expose additional panes at higher indices. You can attach different primitives to different panes independently.
+
+## Attaching and detaching
+
+Create an instance of your primitive class and pass it to `attachPrimitive()` on the target pane:
+
+```typescript
+class MyPanePrimitive {
+  paneViews() {
+    return [{
+      renderer: () => ({
+        draw: (target) => {
+          // drawing logic here
+        },
+      }),
+    }];
+  }
+}
+
+const firstPane = chart.panes()[0];
+const primitive = new MyPanePrimitive();
+firstPane.attachPrimitive(primitive);
+```
+
+To remove the primitive, call `detachPrimitive()` with the same instance:
+
+```typescript
+firstPane.detachPrimitive(primitive);
+```
+
+## Built-in watermark helpers
+
+Lightweight Charts ships two ready-to-use pane primitive factories. They are the fastest way to add a watermark to any pane without writing a custom renderer.
+
+### Text watermark
+
+`createTextWatermark` renders one or more lines of text centered in the pane. Each line has its own font, size, weight, style, and color:
+
+```typescript
+import { createTextWatermark } from 'lightweight-charts';
+
+const firstPane = chart.panes()[0];
+
+const watermark = createTextWatermark(firstPane, {
+  lines: [
+    {
+      text: 'AAPL',
+      fontSize: 48,
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      color: 'rgba(0, 0, 0, 0.15)',
+    },
+    {
+      text: 'Apple Inc.',
+      fontSize: 24,
+      color: 'rgba(0, 0, 0, 0.10)',
+    },
+  ],
+});
+```
+
+<Tip>
+  The returned `watermark` object exposes `applyOptions()` and `options()` so you can update the text or style at any time without detaching and re-attaching.
+</Tip>
+
+### Image watermark
+
+`createImageWatermark` renders an `HTMLImageElement` (or any image-like element) as a watermark. Pass layout options to control how it is scaled and positioned within the pane:
+
+```typescript
+import { createImageWatermark } from 'lightweight-charts';
+
+const img = document.createElement('img');
+img.src = '/logo.png';
+
+const watermark = createImageWatermark(firstPane, img, {
+  maxWidth: 200,
+  maxHeight: 100,
+  padding: 10,
+  alpha: 0.5,
+});
+```
+
+<Note>
+  Make sure the image has finished loading before creating the watermark, or call `watermark.applyOptions({})` after the image's `load` event fires to trigger a redraw.
+</Note>
+
+## Implementing a custom pane primitive
+
+If the built-in watermarks do not fit your use case, implement `IPanePrimitive` directly. The minimal shape is a class with a `paneViews()` method that returns an array of view objects, each providing a `renderer()` method:
+
+```typescript
+class GradientBackground {
+  paneViews() {
+    return [new GradientBackgroundView()];
+  }
+}
+
+class GradientBackgroundView {
+  renderer() {
+    return new GradientBackgroundRenderer();
+  }
+}
+
+class GradientBackgroundRenderer {
+  draw(target: CanvasRenderingTarget2D): void {
+    target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+      const gradient = context.createLinearGradient(0, 0, 0, mediaSize.height);
+      gradient.addColorStop(0, 'rgba(30, 60, 120, 0.08)');
+      gradient.addColorStop(1, 'rgba(30, 60, 120, 0.00)');
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, mediaSize.width, mediaSize.height);
+    });
+  }
+}
+
+// Attach to the main pane
+chart.panes()[0].attachPrimitive(new GradientBackground());
+```
+
+## Lifecycle and update cycle
+
+Pane primitives support the same lifecycle hooks as series primitives:
+
+<Accordion title="attached({ chart, requestUpdate })">
+  Called when the primitive is attached to a pane. Store the `requestUpdate` callback to schedule redraws when your primitive's state changes outside the normal chart cycle.
+
+  ```typescript
+  class MyPanePrimitive {
+    private _requestUpdate!: () => void;
+
+    attached({ requestUpdate }: PaneAttachedParameter): void {
+      this._requestUpdate = requestUpdate;
+    }
+
+    // Call this._requestUpdate() whenever external state changes
+  }
+  ```
+</Accordion>
+
+<Accordion title="detached()">
+  Called when the primitive is removed from the pane. Remove any event listeners or external references that were set up in `attached()`.
+</Accordion>
+
+<Accordion title="updateAllViews()">
+  Called by the library before each redraw. Recompute and cache any values your renderers will need — layout bounds, scale factors, or dynamic colors — so the renderer itself stays simple and fast.
+</Accordion>
+
+## Draw order with `zOrder`
+
+Like series primitive pane views, each view returned by `paneViews()` can declare a `zOrder` property:
+
+| Value | Drawn relative to chart elements |
+|-------|----------------------------------|
+| `'bottom'` | Below grid lines and all series |
+| `'normal'` | Above series, below crosshair |
+| `'top'` | Above everything including crosshair |
+
+Background watermarks should use `'bottom'`; foreground overlays should use `'top'`.

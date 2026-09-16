@@ -1,0 +1,191 @@
+---
+title: "Canvas Rendering Target API for Lightweight Charts Plugins"
+sidebarTitle: "Canvas Rendering"
+description: "Master the CanvasRenderingTarget2D API used by all Lightweight Charts plugin renderers — bitmap vs. media coordinates, pixel-perfect tips, and context patterns."
+---
+
+Every renderer in a Lightweight Charts plugin — whether it belongs to a custom series, a series primitive, or a pane primitive — receives a `CanvasRenderingTarget2D` instance as the entry point for all drawing. This object comes from the [Fancy Canvas](https://github.com/tradingview/fancy-canvas) library and wraps the browser's standard `CanvasRenderingContext2D` with two scoped coordinate spaces that handle device pixel ratio automatically. Understanding these two spaces and when to use each one is the key to writing crisp, performant plugin renderers.
+
+## Two coordinate spaces
+
+`CanvasRenderingTarget2D` provides two mutually exclusive scopes for drawing. Call the method that matches the coordinate system you want to work in, and draw inside the callback:
+
+<Tabs>
+  <Tab title="useBitmapCoordinateSpace">
+    **Best for:** 1 px lines, sharp geometric shapes, anything where sub-pixel precision matters.
+
+    Provides coordinates in **physical device pixels**. The canvas context is pre-scaled by the device pixel ratio, so a `lineWidth` of `1` draws a true single-pixel line regardless of screen density.
+
+    The callback receives a `BitmapCoordinatesRenderingScope` with:
+
+    | Property | Type | Description |
+    |----------|------|-------------|
+    | `context` | `CanvasRenderingContext2D` | Canvas context to draw on |
+    | `bitmapSize` | `Size` | Canvas dimensions in physical pixels |
+    | `mediaSize` | `Size` | Canvas dimensions in CSS pixels |
+    | `horizontalPixelRatio` | `number` | Physical pixels per CSS pixel, horizontal |
+    | `verticalPixelRatio` | `number` | Physical pixels per CSS pixel, vertical |
+
+    ```typescript
+    target.useBitmapCoordinateSpace(({ context, bitmapSize }) => {
+      // Fill the entire canvas
+      context.beginPath();
+      context.rect(0, 0, bitmapSize.width, bitmapSize.height);
+      context.fillStyle = 'rgba(100, 200, 50, 0.5)';
+      context.fill();
+    });
+    ```
+  </Tab>
+  <Tab title="useMediaCoordinateSpace">
+    **Best for:** Text, CSS-pixel-aligned layout, coordinates derived from the series or price converter API.
+
+    Provides coordinates in **CSS pixels** (media coordinates). You do not need to think about device pixel ratio — the canvas transform is applied automatically.
+
+    The callback receives a `MediaCoordinatesRenderingScope` with:
+
+    | Property | Type | Description |
+    |----------|------|-------------|
+    | `context` | `CanvasRenderingContext2D` | Canvas context to draw on |
+    | `mediaSize` | `Size` | Canvas dimensions in CSS pixels |
+
+    ```typescript
+    target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+      // Fill the entire canvas
+      context.beginPath();
+      context.rect(0, 0, mediaSize.width, mediaSize.height);
+      context.fillStyle = 'rgba(100, 200, 50, 0.5)';
+      context.fill();
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Bitmap vs. media: which to choose
+
+The two spaces exist because of the device pixel ratio — the number of physical screen pixels that map to one CSS pixel. On a 2× Retina display, `devicePixelRatio` is `2`, so a 600 × 400 CSS-pixel canvas actually has 1200 × 800 physical pixels.
+
+| Scenario | Recommended space |
+|----------|-------------------|
+| Drawing a 1 px separator line | Bitmap — avoids anti-aliasing blur |
+| Rendering chart bars or candles | Bitmap — full pixel control |
+| Writing text labels | Media — font metrics are in CSS pixels |
+| Using coordinates from `priceToCoordinate()` or a price converter | Media — those values are already in CSS pixels |
+| General shapes where blur is acceptable | Media — simpler code |
+
+<Note>
+  `priceToCoordinate()` and the `PriceToCoordinateConverter` passed to custom series renderers return **media** coordinates. If you are inside `useBitmapCoordinateSpace`, multiply the returned value by `verticalPixelRatio` before using it as a y-coordinate.
+</Note>
+
+## Pixel-perfect rendering
+
+Drawing crisp 1 px lines and sharp rectangle edges requires a few consistent habits:
+
+<Steps>
+  <Step title="Use bitmap space for thin lines">
+    Thin lines drawn in media space are scaled up by the pixel ratio, which causes anti-aliasing blur on high-DPI screens. Draw them in `useBitmapCoordinateSpace` where `lineWidth = 1` maps to exactly one physical pixel.
+
+    ```typescript
+    target.useBitmapCoordinateSpace(({ context, bitmapSize }) => {
+      context.beginPath();
+      context.strokeStyle = 'red';
+      context.lineWidth = 1;
+      context.moveTo(0, bitmapSize.height / 2);
+      context.lineTo(bitmapSize.width, bitmapSize.height / 2);
+      context.stroke();
+    });
+    ```
+  </Step>
+
+  <Step title="Round coordinates with Math.round()">
+    Fractional coordinates produce blurry edges because the renderer must blend two adjacent pixels. Always round when converting from media to bitmap coordinates:
+
+    ```typescript
+    target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio, verticalPixelRatio }) => {
+      // Convert a media coordinate (e.g. from priceToCoordinate) to bitmap
+      const mediaX = 123.7;  // CSS pixels
+      const mediaY = 45.2;   // CSS pixels
+
+      const bitmapX = Math.round(mediaX * horizontalPixelRatio);
+      const bitmapY = Math.round(mediaY * verticalPixelRatio);
+
+      context.fillRect(bitmapX, bitmapY, 4, 4);
+    });
+    ```
+  </Step>
+
+  <Step title="Never multiply coordinates manually by devicePixelRatio">
+    The coordinate spaces already handle the pixel ratio transform. If you multiply by `window.devicePixelRatio` yourself, coordinates will be applied twice and your graphics will be rendered at the wrong position or scale.
+  </Step>
+</Steps>
+
+## A complete renderer example
+
+```typescript
+class HorizontalLineRenderer {
+  private _price: number = 0;
+
+  setPrice(price: number): void {
+    this._price = price;
+  }
+
+  draw(
+    target: CanvasRenderingTarget2D,
+    priceConverter: PriceToCoordinateConverter,
+  ): void {
+    const y = priceConverter(this._price);
+    if (y === null) return;  // price is outside the visible range
+
+    target.useBitmapCoordinateSpace(
+      ({ context, bitmapSize, verticalPixelRatio }) => {
+        // y is a media coordinate — convert to bitmap
+        const yBitmap = Math.round(y * verticalPixelRatio);
+
+        context.beginPath();
+        context.strokeStyle = '#2962ff';
+        context.lineWidth = 1;
+        context.setLineDash([4, 4]);
+        context.moveTo(0, yBitmap);
+        context.lineTo(bitmapSize.width, yBitmap);
+        context.stroke();
+      },
+    );
+  }
+}
+```
+
+## Saving and restoring canvas state
+
+Both `useBitmapCoordinateSpace` and `useMediaCoordinateSpace` automatically save and restore the canvas context around their callback. This means side effects like `strokeStyle`, `fillStyle`, `lineWidth`, and transform changes made inside the callback do not leak into the next draw call.
+
+If you call additional helper functions from inside the callback, those functions should save and restore the context themselves:
+
+```typescript
+function drawLabel(scope: MediaCoordinatesRenderingScope, text: string, x: number, y: number): void {
+  const ctx = scope.context;
+
+  // Save state before modifying it
+  ctx.save();
+  try {
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, x, y);
+  } finally {
+    // Restore even if an error is thrown
+    ctx.restore();
+  }
+}
+
+target.useMediaCoordinateSpace(scope => {
+  drawLabel(scope, 'Entry', 120, 80);
+  drawLabel(scope, 'Target', 120, 40);
+});
+```
+
+<Warning>
+  The `CanvasRenderingTarget2D` target is scoped to a single pane and a single draw call. Do not cache the target object or the `context` reference across frames — they may be stale or invalid on the next paint.
+</Warning>
+
+## Scope of the target
+
+Each renderer receives a fresh `CanvasRenderingTarget2D` scoped to the pane region being drawn. Do not store the target or the `context` it provides between render calls. Access them only from within the `use*CoordinateSpace` callback passed to the current invocation.

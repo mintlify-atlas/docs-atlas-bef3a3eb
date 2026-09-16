@@ -1,0 +1,279 @@
+---
+title: "Chart Panes: Multi-Panel Layouts in Lightweight Charts"
+sidebarTitle: "Panes"
+description: "Create multi-pane chart layouts in Lightweight Charts, control pane height and order, move series between panes, and attach primitives using IPaneApi."
+---
+
+Panes divide a single chart canvas into separate horizontal sections, each with its own independent price scale and set of series. The most common use case is displaying a price chart in the main pane and a volume histogram (or another indicator) in a smaller pane below — all within one chart element, sharing the same time scale and crosshair.
+
+---
+
+## Default Pane
+
+Every Lightweight Charts instance starts with a single pane at index `0`. All series added without specifying a `paneIndex` land in this default pane. You can start working with multi-pane layouts at any point after chart creation.
+
+```typescript
+import { createChart, CandlestickSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), {
+  height: 500,
+});
+
+// Goes into pane 0 (the default pane) implicitly
+const priceSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+```
+
+---
+
+## Adding Panes
+
+Use `chart.addPane()` to create additional panes. The method returns an `IPaneApi` object for that pane. Panes are numbered from top to bottom starting at `0`.
+
+```typescript
+const volumePane = chart.addPane();
+```
+
+You can also create a series directly in a new pane by passing a `paneIndex` as the third argument to `chart.addSeries()`. If the specified pane does not yet exist, it is created automatically.
+
+```typescript
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), { height: 600 });
+
+// Pane 0 — price chart
+const priceSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+}, 0); // paneIndex = 0
+
+// Pane 1 — volume indicator in a separate pane
+const volumeSeries = chart.addSeries(HistogramSeries, {
+  color: '#26a69a',
+  priceFormat: { type: 'volume' },
+}, 1); // paneIndex = 1  ← creates a new pane automatically
+```
+
+---
+
+## Pane Separator Customization
+
+The separator between panes can be styled and optionally made resizable by the end user through `LayoutPanesOptions`.
+
+```typescript
+const chart = createChart(document.getElementById('container'), {
+  layout: {
+    panes: {
+      separatorColor: '#e0e0e0',       // color of the dividing line
+      separatorHoverColor: '#bdbdbd',  // color when the user hovers over it
+      enableResize: true,              // allow the user to drag-resize panes
+    },
+  },
+});
+```
+
+<Accordion title="LayoutPanesOptions reference">
+| Option | Type | Description |
+|---|---|---|
+| `separatorColor` | `string` | CSS color of the separator between panes |
+| `separatorHoverColor` | `string` | Separator color on mouse hover |
+| `enableResize` | `boolean` | Whether the user can drag separators to resize panes |
+</Accordion>
+
+---
+
+## IPaneApi
+
+The `IPaneApi` interface gives full programmatic control over an individual pane. Retrieve it via `chart.addPane()` or via `chart.panes()`.
+
+```typescript
+// Get all panes
+const allPanes = chart.panes(); // IPaneApi[]
+
+// Get the pane a specific series lives in
+const pane = mySeries.getPane();
+```
+
+### Height and Stretch Factor
+
+<Tabs>
+  <Tab title="Fixed height (pixels)">
+    ```typescript
+    const pane = chart.panes()[1]; // second pane
+
+    pane.setHeight(150); // fix the pane height to 150 px
+    const h = pane.getHeight(); // read it back
+    ```
+  </Tab>
+  <Tab title="Relative size (stretch factor)">
+    ```typescript
+    const panes = chart.panes();
+
+    // Make the price pane twice the height of the volume pane
+    panes[0].setStretchFactor(2);
+    panes[1].setStretchFactor(1);
+
+    // Read the current factor
+    console.log(panes[0].getStretchFactor()); // 2
+    ```
+
+    <Note>
+    Stretch factors are relative — only the ratio between panes matters. Setting `[2, 1]` gives the same result as `[0.67, 0.33]`.
+    </Note>
+  </Tab>
+</Tabs>
+
+### Moving a Pane
+
+```typescript
+// Swap the positions of pane 0 and pane 1
+chart.swapPanes(0, 1);
+
+// Or move a pane to a specific index using IPaneApi.moveTo()
+chart.panes()[0].moveTo(2);
+```
+
+### Querying a Pane
+
+```typescript
+const pane = chart.panes()[0];
+
+// List all series in this pane
+const series = pane.getSeries();
+console.log(`Pane 0 has ${series.length} series`);
+
+// Read the pane index
+console.log(pane.paneIndex()); // 0
+
+// Access the underlying DOM element
+const el = pane.getHTMLElement();
+```
+
+### Moving a Series Between Panes
+
+```typescript
+// Move a series to pane 1 (created if it doesn't exist)
+mySeries.moveToPane(1);
+```
+
+### Adding a Series to a Specific Pane via IPaneApi
+
+You can also add series directly through a pane's API — useful when you already hold a reference to the pane object:
+
+```typescript
+const pane1 = chart.panes()[1];
+const rsiSeries = pane1.addSeries(LineSeries, { color: '#ff9800' });
+```
+
+---
+
+## Removing Panes
+
+```typescript
+// Remove the pane at index 1
+chart.removePane(1);
+```
+
+<Warning>
+Removing a pane also removes all series within it. This operation is irreversible — you cannot undo a `removePane()` call.
+</Warning>
+
+To keep a pane alive even when all its series have been removed, use `setPreserveEmptyPane(true)`:
+
+```typescript
+const pane = chart.panes()[1];
+pane.setPreserveEmptyPane(true);
+console.log(pane.preserveEmptyPane()); // true
+```
+
+---
+
+## Example: Price Chart with Volume in a Separate Pane
+
+This complete example creates a two-pane layout: candlesticks on top and a volume histogram on the bottom, both sharing the same time axis and crosshair.
+
+```typescript
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), {
+  height: 600,
+  layout: {
+    background: { type: 'solid', color: '#1e1e2e' },
+    textColor: '#cdd6f4',
+    panes: {
+      separatorColor: '#45475a',
+      enableResize: true,
+    },
+  },
+});
+
+// — Pane 0: price chart —
+const priceSeries = chart.addSeries(CandlestickSeries, {
+  upColor:       '#a6e3a1',
+  downColor:     '#f38ba8',
+  borderVisible: false,
+  wickUpColor:   '#a6e3a1',
+  wickDownColor: '#f38ba8',
+}, 0);
+
+// — Pane 1: volume indicator —
+const volumeSeries = chart.addSeries(HistogramSeries, {
+  priceFormat: { type: 'volume' },
+}, 1);
+
+// Size panes — price gets 70%, volume gets 30%
+chart.panes()[0].setStretchFactor(7);
+chart.panes()[1].setStretchFactor(3);
+
+// Populate data
+const priceData = [
+  { time: '2024-01-01', open: 100, high: 106, low: 97,  close: 104 },
+  { time: '2024-01-02', open: 104, high: 110, low: 102, close: 107 },
+  { time: '2024-01-03', open: 107, high: 108, low: 99,  close: 101 },
+  { time: '2024-01-04', open: 101, high: 105, low: 98,  close: 103 },
+];
+
+const volumeData = [
+  { time: '2024-01-01', value: 1200000, color: '#a6e3a1' },
+  { time: '2024-01-02', value: 1850000, color: '#a6e3a1' },
+  { time: '2024-01-03', value: 980000,  color: '#f38ba8' },
+  { time: '2024-01-04', value: 1100000, color: '#a6e3a1' },
+];
+
+priceSeries.setData(priceData);
+volumeSeries.setData(volumeData);
+
+chart.timeScale().fitContent();
+```
+
+---
+
+## Full IPaneApi Reference
+
+<Accordion title="All IPaneApi methods">
+| Method | Returns | Description |
+|---|---|---|
+| `getHeight()` | `number` | Pane height in pixels |
+| `setHeight(height)` | `void` | Set pane height in pixels |
+| `getStretchFactor()` | `number` | Current stretch factor |
+| `setStretchFactor(factor)` | `void` | Set relative pane size |
+| `moveTo(paneIndex)` | `void` | Move this pane to a new position |
+| `paneIndex()` | `number` | Current zero-based index of this pane |
+| `getSeries()` | `ISeriesApi[]` | All series in this pane |
+| `getHTMLElement()` | `HTMLElement \| null` | The underlying DOM element |
+| `priceScale(id)` | `IPriceScaleApi` | Price scale by ID within this pane |
+| `addSeries(definition, options?)` | `ISeriesApi` | Create a series in this pane |
+| `addCustomSeries(view, options?)` | `ISeriesApi` | Create a custom series in this pane |
+| `attachPrimitive(primitive)` | `void` | Attach a drawing primitive |
+| `detachPrimitive(primitive)` | `void` | Remove a drawing primitive |
+| `setPreserveEmptyPane(preserve)` | `void` | Keep the pane alive when empty |
+| `preserveEmptyPane()` | `boolean` | Read the preserve-empty setting |
+</Accordion>

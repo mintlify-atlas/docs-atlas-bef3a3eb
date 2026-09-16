@@ -1,0 +1,235 @@
+---
+title: "Lightweight Charts v4 to v5 Migration Guide"
+sidebarTitle: "v4 → v5"
+description: "Upgrade Lightweight Charts from v4 to v5: new unified addSeries API, series markers plugin, watermark plugin, and plugin typing renames."
+---
+
+Lightweight Charts v5 introduces several breaking changes focused on improving tree-shaking and bundle size. The most impactful change is a unified series creation API, but watermarks and series markers have also moved to standalone plugins. This guide walks through every breaking change and shows exact before/after code for each.
+
+<Warning>
+  Version 5 contains **multiple breaking changes** that require code updates before upgrading. Review every section below before updating your dependency.
+</Warning>
+
+## Series Creation API
+
+The individual `addLineSeries`, `addAreaSeries`, and other per-type methods have been replaced by a single `addSeries` function that accepts a series definition as its first argument. This enables proper tree-shaking so that unused series types are not included in your bundle.
+
+<Steps>
+
+### Update your imports
+
+Each series type is now a named export from `lightweight-charts`. Import only the series types you actually use.
+
+```typescript
+import { createChart } from 'lightweight-charts'; // [!code --]
+import { createChart, LineSeries } from 'lightweight-charts'; // [!code ++]
+```
+
+### Replace series creation calls
+
+Pass the imported series definition as the first argument to `chart.addSeries()`, followed by your options object.
+
+<Tabs>
+  <Tab title="Before">
+    ```typescript
+    const chart = createChart(container, {});
+    const lineSeries = chart.addLineSeries({ color: 'red' });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```typescript
+    const chart = createChart(container, {});
+    const lineSeries = chart.addSeries(LineSeries, { color: 'red' });
+    ```
+  </Tab>
+</Tabs>
+
+### Apply the pattern to all series types
+
+Use the reference table below to update every series creation call in your project.
+
+</Steps>
+
+### Migration Reference Table
+
+| v4 Method | Series Import | v5 Method |
+|---|---|---|
+| `chart.addLineSeries(options)` | `LineSeries` | `chart.addSeries(LineSeries, options)` |
+| `chart.addAreaSeries(options)` | `AreaSeries` | `chart.addSeries(AreaSeries, options)` |
+| `chart.addBarSeries(options)` | `BarSeries` | `chart.addSeries(BarSeries, options)` |
+| `chart.addBaselineSeries(options)` | `BaselineSeries` | `chart.addSeries(BaselineSeries, options)` |
+| `chart.addCandlestickSeries(options)` | `CandlestickSeries` | `chart.addSeries(CandlestickSeries, options)` |
+| `chart.addHistogramSeries(options)` | `HistogramSeries` | `chart.addSeries(HistogramSeries, options)` |
+
+### Usage by Module Format
+
+<Tabs>
+  <Tab title="ESM">
+    ```typescript
+    import { createChart, LineSeries, CandlestickSeries } from 'lightweight-charts';
+
+    const chart = createChart(container, {});
+    const line = chart.addSeries(LineSeries, { color: 'red' });
+    const candles = chart.addSeries(CandlestickSeries, {});
+    ```
+  </Tab>
+  <Tab title="UMD">
+    ```javascript
+    const chart = LightweightCharts.createChart(container, {});
+    const line = chart.addSeries(LightweightCharts.LineSeries, { color: 'red' });
+    const candles = chart.addSeries(LightweightCharts.CandlestickSeries, {});
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Series Markers
+
+<Warning>
+  `series.setMarkers()` and `series.markers()` have been **removed** from the series API. You must migrate to the `createSeriesMarkers` plugin.
+</Warning>
+
+Markers are now managed through a dedicated primitive returned by `createSeriesMarkers`. This keeps marker rendering code out of your bundle when markers are not used.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    // v4 — markers managed directly on the series instance
+    series.setMarkers([
+        {
+            time: '2019-04-09',
+            position: 'aboveBar',
+            color: 'black',
+            shape: 'arrowDown',
+        },
+    ]);
+
+    // Reading markers
+    const markers = series.markers();
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    // v5 — markers managed through the primitive instance
+    import { createSeriesMarkers } from 'lightweight-charts'; // [!code ++]
+
+    const seriesMarkers = createSeriesMarkers(series, [ // [!code ++]
+        {
+            time: '2019-04-09',
+            position: 'aboveBar',
+            color: 'black',
+            shape: 'arrowDown',
+        },
+    ]); // [!code ++]
+
+    // Reading markers
+    const markers = seriesMarkers.markers(); // [!code ++]
+
+    // Updating markers later
+    seriesMarkers.setMarkers([/* updated markers */]);
+
+    // Clearing all markers
+    seriesMarkers.setMarkers([]);
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The **marker configuration object format** (fields like `time`, `position`, `color`, `shape`) has not changed — only how you register and retrieve markers has changed.
+</Note>
+
+---
+
+## Watermarks
+
+<Warning>
+  The `watermark` chart option has been **removed**. Charts that set `watermark: { ... }` inside `createChart` options will silently ignore it in v5.
+</Warning>
+
+Watermarks are now a pane primitive provided by `createTextWatermark`. A new `createImageWatermark` primitive is also available. Because watermarks are now tree-shakeable, projects that don't use them benefit from a smaller bundle automatically.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    // v4 — watermark as a chart option
+    const chart = createChart(container, {
+        watermark: {
+            text: 'AAPL',
+            color: 'rgba(255, 0, 0, 0.5)',
+        },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    // v5 — watermark as a pane primitive
+    import { createChart, createTextWatermark } from 'lightweight-charts'; // [!code ++]
+
+    const chart = createChart(container, options);
+    const firstPane = chart.panes()[0]; // [!code ++]
+
+    createTextWatermark(firstPane, { // [!code ++]
+        horzAlign: 'center',
+        vertAlign: 'center',
+        lines: [{ // [!code ++]
+            text: 'AAPL',
+            color: 'rgba(255, 0, 0, 0.5)',
+            fontSize: 50,
+        }], // [!code ++]
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Key Option Changes
+
+- **`lines` array**: Text options (color, font size, font style, font family) are now defined **per line** inside the `lines` array, enabling multi-line watermarks.
+- **`horzAlign` / `vertAlign`**: Positioning is now top-level on the options object, not per-line.
+- **Multiple panes**: Pass the specific pane object to `createTextWatermark` — use `chart.panes()[0]` for single-pane charts.
+
+### Multi-Line Watermark Example
+
+```javascript
+const firstPane = chart.panes()[0];
+
+createTextWatermark(firstPane, {
+    horzAlign: 'center',
+    vertAlign: 'center',
+    lines: [
+        {
+            text: 'AAPL',
+            color: 'rgba(255, 0, 0, 0.5)',
+            fontSize: 100,
+            fontStyle: 'bold',
+        },
+        {
+            text: 'Apple Inc.',
+            color: 'rgba(0, 0, 255, 0.5)',
+            fontSize: 50,
+            fontStyle: 'italic',
+            fontFamily: 'monospace',
+        },
+    ],
+});
+```
+
+---
+
+## Plugin Typings
+
+<Warning>
+  If you have written custom series primitives or plugins, several interface names have been **renamed**. Update your type references after upgrading.
+</Warning>
+
+The addition of Pane Primitives in v5 required renaming some shared interfaces to remove the `SeriesPrimitive` prefix. The functionality is identical — only the names changed.
+
+| v4 Interface / Type | v5 Interface / Type |
+|---|---|
+| `ISeriesPrimitivePaneView` | `IPrimitivePaneView` |
+| `ISeriesPrimitivePaneRenderer` | `IPrimitivePaneRenderer` |
+| `SeriesPrimitivePaneViewZOrder` | `PrimitivePaneViewZOrder` |
+
+<Note>
+  TypeScript will surface these as type errors immediately after upgrading, making them straightforward to find and fix with a project-wide search and replace.
+</Note>

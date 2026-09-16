@@ -1,0 +1,351 @@
+---
+title: "ISeriesPrimitive: Series Plugin Interface Reference"
+sidebarTitle: "ISeriesPrimitive"
+description: "Build custom series overlays in Lightweight Charts by implementing ISeriesPrimitive — pane views, axis labels, autoscale expansion, hit testing, and lifecycle hooks."
+---
+
+`ISeriesPrimitive` is the interface you implement when building a series-level plugin — a custom drawing overlay that is tightly coupled to a specific series instance. Primitives are attached with `series.attachPrimitive(primitive)` and detached with `series.detachPrimitive(primitive)`. The library calls the primitive's methods automatically during the render cycle whenever the chart redraws.
+
+Unlike custom series (`ICustomSeriesPaneView`), primitives do not replace the default series drawing — they layer additional graphics on top of or behind an existing series.
+
+---
+
+## Interface Overview
+
+`ISeriesPrimitive<HorzScaleItem>` is a type alias for `ISeriesPrimitiveBase<SeriesAttachedParameter>`, which defines a rich set of optional methods. Only the methods you need must be implemented.
+
+---
+
+## Lifecycle Hooks
+
+### attached (optional)
+
+Called once immediately after the primitive is attached to the series. Use this to store references and set up any subscriptions.
+
+<ParamField body="param" type="SeriesAttachedParameter<HorzScaleItem>" required>
+  <Expandable title="SeriesAttachedParameter fields">
+    <ResponseField name="chart" type="IChartApiBase<HorzScaleItem>">
+      Reference to the parent chart instance.
+    </ResponseField>
+    <ResponseField name="series" type="ISeriesApi<SeriesType, HorzScaleItem>">
+      Reference to the series this primitive is attached to.
+    </ResponseField>
+    <ResponseField name="requestUpdate" type="() => void">
+      Call this to schedule a chart redraw from within the primitive (e.g. after an async operation or timer).
+    </ResponseField>
+    <ResponseField name="horzScaleBehavior" type="IHorzScaleBehavior<HorzScaleItem>">
+      The horizontal scale behavior instance for advanced time conversion.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```typescript
+class MyPrimitive {
+  private _series: ISeriesApi<SeriesType> | null = null;
+  private _requestUpdate: (() => void) | null = null;
+
+  attached({ series, requestUpdate }) {
+    this._series = series;
+    this._requestUpdate = requestUpdate;
+  }
+
+  detached() {
+    this._series = null;
+    this._requestUpdate = null;
+  }
+}
+```
+
+---
+
+### detached (optional)
+
+Called when the primitive is removed from the series. Clean up all references, timers, and event listeners here.
+
+---
+
+## View Providers
+
+All view-provider methods must return **stable array references** when nothing has changed — the library uses reference equality for internal cache invalidation. Only return a new array when the set of views actually changes.
+
+### updateAllViews (optional)
+
+Called on each render cycle before the view methods are queried. This is where you should recompute coordinates and update your view/renderer state using the latest series data and price scale state.
+
+```typescript
+updateAllViews() {
+  // Recompute Y position for the current price
+  const y = this._series?.priceToCoordinate(this._targetPrice);
+  this._currentY = y ?? null;
+}
+```
+
+---
+
+### paneViews (optional)
+
+Returns an array of `IPrimitivePaneView` objects that render in the main chart area (the series pane).
+
+**Returns:** `readonly IPrimitivePaneView[]`
+
+Each `IPrimitivePaneView` must implement:
+
+<ResponseField name="renderer()" type="() => IPrimitivePaneRenderer | null">
+  Returns the renderer responsible for drawing on the canvas, or `null` if there is nothing to draw this frame.
+</ResponseField>
+
+<ResponseField name="zOrder?()" type="() => 'bottom' | 'normal' | 'top'">
+  Controls layering. `'bottom'` renders below all series, `'normal'` at the same level, `'top'` above everything including the crosshair. Defaults to `'normal'`.
+</ResponseField>
+
+---
+
+### priceAxisViews (optional)
+
+Returns labels to be drawn on the price axis associated with this series.
+
+**Returns:** `readonly ISeriesPrimitiveAxisView[]`
+
+<ResponseField name="coordinate()" type="() => number">
+  Desired vertical position in pixels from the top. The library may shift labels to avoid overlaps with other axis labels.
+</ResponseField>
+
+<ResponseField name="fixedCoordinate?()" type="() => number | undefined">
+  When set, the label is always drawn at this exact coordinate and rendered above non-fixed labels. Return a large negative number from `coordinate()` so the automatic layout algorithm doesn't allocate space for this label.
+</ResponseField>
+
+<ResponseField name="text()" type="() => string">The label text.</ResponseField>
+<ResponseField name="textColor()" type="() => string">The text color.</ResponseField>
+<ResponseField name="backColor()" type="() => string">The background color of the label box.</ResponseField>
+<ResponseField name="visible?()" type="() => boolean">Whether the label should be shown. Defaults to `true`.</ResponseField>
+<ResponseField name="tickVisible?()" type="() => boolean">Whether the tick mark line should be shown. Defaults to `true`.</ResponseField>
+
+---
+
+### timeAxisViews (optional)
+
+Returns labels to be drawn on the time (horizontal) axis. Implements the same `ISeriesPrimitiveAxisView` interface as `priceAxisViews`, but `coordinate()` returns a pixel distance from the **left** edge of the time scale.
+
+**Returns:** `readonly ISeriesPrimitiveAxisView[]`
+
+---
+
+### priceAxisPaneViews (optional)
+
+Returns pane views rendered in the price axis panel area (to the left or right of the main chart), rather than in the chart itself.
+
+**Returns:** `readonly IPrimitivePaneView[]`
+
+---
+
+### timeAxisPaneViews (optional)
+
+Returns pane views rendered in the time axis panel area (below the main chart).
+
+**Returns:** `readonly IPrimitivePaneView[]`
+
+---
+
+## IPrimitivePaneRenderer
+
+The renderer interface for any pane-based view.
+
+### draw
+
+<ParamField body="target" type="CanvasRenderingTarget2D" required>
+  The canvas rendering target from fancy-canvas. Use `useBitmapCoordinateSpace` for crisp pixel-perfect drawing or `useMediaCoordinateSpace` for CSS-pixel simplicity.
+</ParamField>
+
+<ParamField body="utils" type="DrawingUtils">
+  Optional drawing utilities provided by the library. Currently exposes `setLineStyle(ctx, lineStyle)` to apply `LineStyle` dash patterns to a canvas context.
+</ParamField>
+
+### drawBackground (optional)
+
+Same signature as `draw`, but called during the background render pass. Useful for watermarks, background shading, or anything that must appear behind all series.
+
+---
+
+## autoscaleInfo (optional)
+
+Called frequently during scroll and zoom operations. Return an `AutoscaleInfo` to extend the automatic price range to include visual elements that extend beyond the series' natural data range (e.g. markers drawn above the highest bar).
+
+<Warning>
+This method is called very frequently. Keep it simple or cache its result to maintain chart responsiveness.
+</Warning>
+
+<ParamField body="startTimePoint" type="Logical">Logical index of the first visible bar.</ParamField>
+<ParamField body="endTimePoint" type="Logical">Logical index of the last visible bar.</ParamField>
+
+**Returns:** `AutoscaleInfo | null`
+
+---
+
+## hitTest (optional)
+
+Called on every cursor move. Return a `PrimitiveHoveredItem` when the cursor is over a drawn element belonging to this primitive, or `null` otherwise. The returned `externalId` is surfaced in `crosshairMoved` and `click` chart events.
+
+**Returns:** `PrimitiveHoveredItem | null`
+
+<ResponseField name="PrimitiveHoveredItem" type="object">
+  <Expandable title="Fields">
+    <ResponseField name="externalId" type="string" required>
+      Identifier for the hovered object. Surfaced in chart events as `hoveredObjectId`.
+    </ResponseField>
+    <ResponseField name="zOrder" type="PrimitivePaneViewZOrder" required>
+      Z-order of the hovered view.
+    </ResponseField>
+    <ResponseField name="distance" type="number">
+      Distance in CSS pixels from the cursor to the object. Lower values win over higher when comparing overlapping hits.
+    </ResponseField>
+    <ResponseField name="hitTestPriority" type="number">
+      Secondary comparison when distances are equal. `2` = point (highest), `1` = line, `0` = range.
+    </ResponseField>
+    <ResponseField name="cursorStyle" type="string">
+      Optional CSS cursor override for the chart pane.
+    </ResponseField>
+    <ResponseField name="isBackground" type="boolean">
+      Set to `true` if the hit is on a `drawBackground`-rendered element.
+    </ResponseField>
+    <ResponseField name="itemType" type='"marker" | "primitive"'>
+      Optional hint for the public event type.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Full Example: Price Target Line
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import type {
+      ISeriesPrimitive,
+      IPrimitivePaneView,
+      IPrimitivePaneRenderer,
+      ISeriesPrimitiveAxisView,
+      SeriesAttachedParameter,
+      ISeriesApi,
+    } from 'lightweight-charts';
+    import type { SeriesType } from 'lightweight-charts';
+
+    class PriceTargetRenderer implements IPrimitivePaneRenderer {
+      private _y: number | null = null;
+
+      setY(y: number | null) { this._y = y; }
+
+      draw(target) {
+        if (this._y === null) return;
+        const y = this._y;
+
+        target.useBitmapCoordinateSpace(({ context: ctx, bitmapSize, verticalPixelRatio }) => {
+          const yBitmap = Math.round(y * verticalPixelRatio);
+          ctx.save();
+          ctx.strokeStyle = '#e91e63';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.moveTo(0, yBitmap);
+          ctx.lineTo(bitmapSize.width, yBitmap);
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+    }
+
+    class PriceTargetView implements IPrimitivePaneView {
+      private _renderer = new PriceTargetRenderer();
+
+      setY(y: number | null) { this._renderer.setY(y); }
+      renderer() { return this._renderer; }
+      zOrder() { return 'top' as const; }
+    }
+
+    class PriceTargetPrimitive implements ISeriesPrimitive {
+      private _targetPrice: number;
+      private _series: ISeriesApi<SeriesType> | null = null;
+      private _view = new PriceTargetView();
+      private _views = [this._view];
+
+      constructor(targetPrice: number) {
+        this._targetPrice = targetPrice;
+      }
+
+      attached({ series }: SeriesAttachedParameter) {
+        this._series = series;
+      }
+
+      detached() {
+        this._series = null;
+      }
+
+      updateAllViews() {
+        const y = this._series?.priceToCoordinate(this._targetPrice) ?? null;
+        this._view.setY(y);
+      }
+
+      paneViews() { return this._views; }
+    }
+
+    // Usage
+    const primitive = new PriceTargetPrimitive(155.00);
+    series.attachPrimitive(primitive);
+
+    // Later:
+    series.detachPrimitive(primitive);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    class PriceTargetRenderer {
+      setY(y) { this._y = y; }
+
+      draw(target) {
+        if (this._y == null) return;
+        const y = this._y;
+        target.useBitmapCoordinateSpace(({ context, bitmapSize, verticalPixelRatio }) => {
+          const yBitmap = Math.round(y * verticalPixelRatio);
+          context.save();
+          context.strokeStyle = '#e91e63';
+          context.lineWidth = 2;
+          context.setLineDash([4, 4]);
+          context.beginPath();
+          context.moveTo(0, yBitmap);
+          context.lineTo(bitmapSize.width, yBitmap);
+          context.stroke();
+          context.restore();
+        });
+      }
+    }
+
+    class PriceTargetView {
+      constructor() { this._renderer = new PriceTargetRenderer(); }
+      setY(y) { this._renderer.setY(y); }
+      renderer() { return this._renderer; }
+      zOrder() { return 'top'; }
+    }
+
+    class PriceTargetPrimitive {
+      constructor(targetPrice) {
+        this._targetPrice = targetPrice;
+        this._view = new PriceTargetView();
+        this._views = [this._view];
+      }
+
+      attached({ series }) { this._series = series; }
+      detached() { this._series = null; }
+
+      updateAllViews() {
+        const y = this._series ? this._series.priceToCoordinate(this._targetPrice) : null;
+        this._view.setY(y);
+      }
+
+      paneViews() { return this._views; }
+    }
+
+    const primitive = new PriceTargetPrimitive(155);
+    series.attachPrimitive(primitive);
+    ```
+  </Tab>
+</Tabs>

@@ -1,0 +1,135 @@
+---
+title: "Lightweight Charts: Fast HTML5 Financial Charting"
+sidebarTitle: "Introduction"
+description: "Discover Lightweight Charts by TradingView — an ~40 KB, TypeScript-first, Apache-2.0 canvas library for rendering interactive financial charts in any browser."
+---
+
+Lightweight Charts™ is TradingView's open-source library for rendering interactive financial charts directly in the browser using an HTML5 canvas. This page covers what the library is, its key characteristics, the built-in series and chart types, the plugin system, and the licensing requirements you must satisfy before shipping it to production.
+
+## What Is Lightweight Charts?
+
+Lightweight Charts™ is one of the smallest and fastest financial charting libraries available for the web. Built on the HTML5 `<canvas>` API, it delivers smooth, interactive charts without the bloat of general-purpose visualization frameworks. The library is written entirely in TypeScript and ships type declarations alongside the compiled JavaScript, so you get full editor autocomplete out of the box.
+
+<Note>
+  Lightweight Charts is a **client-side** library intended for use in browsers. It is not designed for server-side rendering environments such as Node.js. See the [Quickstart](/quickstart) guide for browser compatibility details.
+</Note>
+
+## Key Characteristics
+
+| Property | Detail |
+|---|---|
+| **Bundle size** | ~40 KB minzipped (standalone build) |
+| **Language** | TypeScript-first — ships `dist/typings.d.ts` |
+| **Rendering** | HTML5 Canvas via [fancy-canvas](https://github.com/tradingview/fancy-canvas) |
+| **Framework** | Agnostic — works with React, Vue, Angular, or vanilla JS |
+| **License** | Apache-2.0 (attribution required — see below) |
+| **npm package** | [`lightweight-charts`](https://www.npmjs.com/package/lightweight-charts) |
+
+## Built-in Series Types
+
+Lightweight Charts ships six production-ready series types out of the box. Each series is instantiated via `chart.addSeries()` using a named series descriptor imported directly from the package.
+
+| Series | Import | Best For |
+|---|---|---|
+| **Line** | `LineSeries` | Closing prices, index values |
+| **Area** | `AreaSeries` | Price ranges with fill |
+| **Bar** | `BarSeries` | OHLC bar charts |
+| **Candlestick** | `CandlestickSeries` | OHLC candlestick charts |
+| **Baseline** | `BaselineSeries` | Value relative to a baseline |
+| **Histogram** | `HistogramSeries` | Volume, indicators |
+
+```typescript
+import {
+  createChart,
+  LineSeries,
+  AreaSeries,
+  BarSeries,
+  CandlestickSeries,
+  BaselineSeries,
+  HistogramSeries,
+} from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+
+const line        = chart.addSeries(LineSeries);
+const area        = chart.addSeries(AreaSeries);
+const bar         = chart.addSeries(BarSeries);
+const candlestick = chart.addSeries(CandlestickSeries);
+const baseline    = chart.addSeries(BaselineSeries);
+const histogram   = chart.addSeries(HistogramSeries);
+```
+
+<Tip>
+  A series cannot be converted from one type to another after creation. Different series types require different data shapes and option sets — choose the right type up front.
+</Tip>
+
+## Chart Types
+
+Beyond the standard time-based chart, the library exposes two additional chart constructors for specialized financial use cases:
+
+| Function | Description |
+|---|---|
+| `createChart` | Standard time-based chart — x-axis is a time scale |
+| `createYieldCurveChart` | Yield curve visualization — x-axis is maturity/duration |
+| `createOptionsChart` | Options/price-based chart — x-axis is strike or price level |
+
+All three constructors return an `IChartApi` instance and share the same series API, so the `addSeries` / `setData` / `update` workflow is identical across chart types.
+
+## Plugin System
+
+Lightweight Charts supports a first-class plugin architecture for extending default rendering behavior. Plugins can add new primitives (drawings, overlays, custom renderers) without forking the library. The package ships several built-in plugins:
+
+- **`createTextWatermark`** — overlay a text watermark on the chart pane
+- **`createImageWatermark`** — overlay an image watermark on the chart pane
+- **`createSeriesMarkers`** — attach markers to individual data points on a series
+- **`createUpDownMarkers`** — display directional up/down markers on price movements
+
+Custom series plugins (implementing `ICustomSeriesPaneView`) let you define entirely new series types with bespoke renderers.
+
+```typescript
+import { createChart, LineSeries, createSeriesMarkers } from 'lightweight-charts';
+
+const chart  = createChart(document.getElementById('container'));
+const series = chart.addSeries(LineSeries);
+
+const markers = createSeriesMarkers(series, [
+  { time: '2024-01-03', position: 'belowBar', color: '#2196F3', shape: 'arrowUp', text: 'Buy' },
+  { time: '2024-01-07', position: 'aboveBar', color: '#e91e63', shape: 'arrowDown', text: 'Sell' },
+]);
+```
+
+## License and Attribution
+
+Lightweight Charts™ is released under the **Apache License, Version 2.0**. This license **requires** that you credit TradingView when you ship the library to end users. Specifically, you must:
+
+1. Include the attribution notice from the [`NOTICE`](https://github.com/tradingview/lightweight-charts/blob/master/NOTICE) file on a public page of your website or application.
+2. Add a visible link to [https://www.tradingview.com](https://www.tradingview.com) on that same page.
+
+<Warning>
+  Omitting attribution violates the Apache-2.0 license terms. You can use the built-in [`attributionLogo`](https://tradingview.github.io/lightweight-charts/docs/api/interfaces/LayoutOptions#attributionLogo) chart layout option to render an automatic TradingView link directly on the chart, which satisfies the link requirement.
+</Warning>
+
+```typescript
+const chart = createChart(document.getElementById('container'), {
+  layout: {
+    attributionLogo: true, // renders the required TradingView attribution automatically
+  },
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Install the package, create your first chart, and render a live line series in minutes.
+  </Card>
+  <Card title="Installation" icon="cube" href="/installation">
+    Full installation options including npm, CDN, build variants, and TypeScript configuration.
+  </Card>
+  <Card title="Series Types" icon="chart-line" href="https://tradingview.github.io/lightweight-charts/docs/series-types">
+    Explore all six built-in series types with options reference and live examples.
+  </Card>
+  <Card title="Plugin Development" icon="puzzle-piece" href="https://tradingview.github.io/lightweight-charts/docs/plugins/intro">
+    Build custom primitives and series plugins to extend Lightweight Charts beyond its defaults.
+  </Card>
+</CardGroup>

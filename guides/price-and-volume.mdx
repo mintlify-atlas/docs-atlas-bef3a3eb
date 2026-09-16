@@ -1,0 +1,276 @@
+---
+title: "Displaying Price and Volume on a Single Chart"
+sidebarTitle: "Price & Volume"
+description: "Combine candlestick price series with a volume histogram in separate panes or as an overlay, using scaleMargins to keep the layout clean and readable."
+---
+
+A volume histogram below the price series is one of the most common patterns in financial charting. Lightweight Charts supports this in two ways: placing the volume series in a separate pane (completely isolated price scales), or rendering it as an overlay inside the same pane with a dedicated `priceScaleId`. This guide covers both approaches, starting with the separate-pane layout.
+
+## Separate panes (recommended)
+
+The cleanest way to show price and volume together is to use two chart panes. The candlestick series lives in pane 0 (the default), and the histogram series is added to pane 1 by passing `paneIndex: 1` as the third argument to `chart.addSeries()`.
+
+<Steps>
+
+### Create the chart and price series
+
+```typescript
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), {
+  width: 800,
+  height: 500,
+});
+
+// Pane 0: price series (default pane)
+const candlestickSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+```
+
+### Add the volume series in pane 1
+
+Pass `1` as the third argument to place the histogram in a new pane. Give it a distinct `priceScaleId` so you can configure its scale independently.
+
+```typescript
+// Pane 1: volume histogram
+const volumeSeries = chart.addSeries(
+  HistogramSeries,
+  {
+    color: '#26a69a',
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'volume', // named scale in pane 1
+  },
+  1 // paneIndex
+);
+
+// Keep the volume pane compact — occupies the bottom 30% of its pane
+chart.priceScale('volume').applyOptions({
+  scaleMargins: { top: 0.7, bottom: 0 },
+});
+```
+
+### Set data for both series
+
+```typescript
+candlestickSeries.setData([
+  { time: '2024-01-02', open: 150.00, high: 154.50, low: 148.80, close: 153.20 },
+  { time: '2024-01-03', open: 153.20, high: 156.00, low: 151.00, close: 152.10 },
+  { time: '2024-01-04', open: 152.10, high: 158.30, low: 151.50, close: 157.80 },
+  { time: '2024-01-05', open: 157.80, high: 160.00, low: 155.20, close: 156.40 },
+  { time: '2024-01-08', open: 156.40, high: 159.00, low: 154.00, close: 158.90 },
+]);
+
+// Color each bar based on price direction
+volumeSeries.setData([
+  { time: '2024-01-02', value: 28_500_000, color: '#26a69a' },
+  { time: '2024-01-03', value: 31_200_000, color: '#ef5350' },
+  { time: '2024-01-04', value: 42_100_000, color: '#26a69a' },
+  { time: '2024-01-05', value: 25_300_000, color: '#ef5350' },
+  { time: '2024-01-08', value: 33_800_000, color: '#26a69a' },
+]);
+
+chart.timeScale().fitContent();
+```
+
+</Steps>
+
+## Overlay in the same pane
+
+If you prefer the volume to overlap the price series within a single pane (a common "compact" style), set `priceScaleId` to an empty string `''`. This creates an overlay scale with no visible axis labels.
+
+```typescript
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), { height: 500 });
+
+const candlestickSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+// Overlay volume in pane 0 — no separate pane
+const volumeSeries = chart.addSeries(HistogramSeries, {
+  color: '#26a69a',
+  priceFormat: { type: 'volume' },
+  priceScaleId: '', // empty string = overlay
+});
+
+// Constrain the volume to the bottom 30%
+volumeSeries.priceScale().applyOptions({
+  scaleMargins: {
+    top: 0.7,  // volume starts 70% from top
+    bottom: 0,
+  },
+});
+
+// Push the price series up so it doesn't overlap the volume
+candlestickSeries.priceScale().applyOptions({
+  scaleMargins: {
+    top: 0.05,
+    bottom: 0.35, // leaves room for volume at the bottom
+  },
+});
+```
+
+<Tip>
+  Use `scaleMargins` on both the price and volume series to keep them visually separate in the same pane. Setting `top: 0.7` on the volume and `bottom: 0.35` on the price series creates a comfortable gap so bars don't overlap during large candles.
+</Tip>
+
+## Choosing between separate panes and overlays
+
+<Tabs>
+  <Tab title="Separate panes">
+    **Pros:**
+    - Each pane has its own independent price axis — no scale conflicts
+    - Clean visual separation — price and volume are never overlapping
+    - The volume pane can be resized independently by the user
+
+    **Best for:** Most standard trading UIs, dashboards with readable volume values.
+
+    ```typescript
+    // paneIndex = 1 creates a new pane
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+    }, 1);
+    ```
+  </Tab>
+  <Tab title="Same-pane overlay">
+    **Pros:**
+    - Compact layout — everything in one chart area
+    - Volume bars and candles share the time axis naturally
+
+    **Best for:** Small chart widgets, thumbnails, or space-constrained dashboards.
+
+    ```typescript
+    // priceScaleId: '' makes it an overlay (no axis labels)
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: '',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Dynamic volume bar colors
+
+Lightweight Charts lets you specify a `color` per data point in the histogram. Use this to mirror the candle color (green for up bars, red for down bars):
+
+```typescript
+function buildVolumeData(candles) {
+  return candles.map((candle, index) => {
+    const isUp = index === 0 || candle.close >= candles[index - 1].close;
+    return {
+      time:  candle.time,
+      value: candle.volume,
+      color: isUp ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)',
+    };
+  });
+}
+
+volumeSeries.setData(buildVolumeData(rawCandleData));
+```
+
+<Note>
+  The `color` set on individual data points overrides the series-level `color` option for that specific bar. This makes per-bar color coloring efficient — no extra series or plugins needed.
+</Note>
+
+## Adjusting pane height
+
+After creating a second pane you can programmatically adjust how much vertical space each pane occupies:
+
+```typescript
+// Make the price pane taller and volume pane shorter
+const panes = chart.panes();
+panes[0].setHeight(380); // price pane
+panes[1].setHeight(120); // volume pane
+```
+
+## Complete example
+
+```typescript
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), {
+  width: 900,
+  height: 550,
+  layout: {
+    background: { color: '#ffffff' },
+    textColor: '#333',
+  },
+  grid: {
+    vertLines: { color: '#f0f3fa' },
+    horzLines: { color: '#f0f3fa' },
+  },
+});
+
+// --- Price pane (pane 0) ---
+const candlestickSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+candlestickSeries.setData([
+  { time: '2024-01-02', open: 150.00, high: 154.50, low: 148.80, close: 153.20 },
+  { time: '2024-01-03', open: 153.20, high: 156.00, low: 151.00, close: 152.10 },
+  { time: '2024-01-04', open: 152.10, high: 158.30, low: 151.50, close: 157.80 },
+  { time: '2024-01-05', open: 157.80, high: 160.00, low: 155.20, close: 156.40 },
+  { time: '2024-01-08', open: 156.40, high: 159.00, low: 154.00, close: 158.90 },
+]);
+
+// --- Volume pane (pane 1) ---
+const volumeSeries = chart.addSeries(
+  HistogramSeries,
+  {
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'volume',
+  },
+  1 // creates / targets pane index 1
+);
+
+chart.priceScale('volume').applyOptions({
+  scaleMargins: { top: 0.7, bottom: 0 },
+});
+
+volumeSeries.setData([
+  { time: '2024-01-02', value: 28_500_000, color: '#26a69a' },
+  { time: '2024-01-03', value: 31_200_000, color: '#ef5350' },
+  { time: '2024-01-04', value: 42_100_000, color: '#26a69a' },
+  { time: '2024-01-05', value: 25_300_000, color: '#ef5350' },
+  { time: '2024-01-08', value: 33_800_000, color: '#26a69a' },
+]);
+
+// Optional: resize panes
+chart.panes()[0].setHeight(400);
+chart.panes()[1].setHeight(120);
+
+chart.timeScale().fitContent();
+```
+
+## API reference
+
+<CardGroup cols={2}>
+  <Card title="HistogramSeries" icon="chart-bar" href="https://tradingview.github.io/lightweight-charts/docs/series-types#histogram">
+    The histogram series type used for volume bars.
+  </Card>
+  <Card title="priceScaleId option" icon="tag" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/SeriesOptionsCommon#pricescaleid">
+    Configure a named or overlay price scale for a series.
+  </Card>
+  <Card title="scaleMargins" icon="sliders" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/PriceScaleOptions#scalemargins">
+    Control the vertical position of a series within its pane.
+  </Card>
+  <Card title="addSeries (paneIndex)" icon="plus" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/IChartApi#addseries">
+    The third argument to addSeries() specifies which pane to target.
+  </Card>
+</CardGroup>

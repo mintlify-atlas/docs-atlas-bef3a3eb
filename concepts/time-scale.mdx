@@ -1,0 +1,281 @@
+---
+title: "Time Scale API and Visible Range in Lightweight Charts"
+sidebarTitle: "Time Scale"
+description: "Master the time scale API: data ranges, logical indices, scroll and zoom controls, coordinate conversion, and event subscriptions with practical examples."
+---
+
+The **time scale** (also called the time axis or horizontal scale) runs along the bottom of the chart and maps each data point to a horizontal canvas position. In the standard time-based chart the axis shows calendar time, but in yield curve or options charts it can represent durations or price levels. Regardless of chart type, the same `ITimeScaleApi` interface controls the horizontal axis.
+
+<Info>
+Access the time scale API via `chart.timeScale()`. All methods described here are available on the returned `ITimeScaleApi` object.
+</Info>
+
+---
+
+## Data Range vs Logical Range
+
+The time scale exposes two complementary ways to describe what is currently visible on the chart.
+
+### Data Range
+
+The **data range** spans from the timestamp of the first visible bar to the timestamp of the last visible bar. It reflects only positions covered by actual data — empty whitespace at the edges of the chart is not included.
+
+```typescript
+const visibleRange = chart.timeScale().getVisibleRange();
+// { from: '2024-01-01', to: '2024-01-31' }
+```
+
+<Note>
+`setVisibleRange()` cannot extrapolate beyond your dataset. If you request a range that starts before your earliest data point, the range is silently clamped to your first available bar. Use `setVisibleLogicalRange()` for finer control including offsets into whitespace.
+</Note>
+
+### Logical Range
+
+The **logical range** uses integer bar indices as coordinates. The first bar across all series is index `0`; bars before it have negative indices and bars after it have positive indices. Logical indices can also be fractional:
+
+- An integer index (e.g. `5`) refers to the center of that bar.
+- A fractional index (e.g. `5.2`) means bar 5 is fully visible and bar 6 is 20% visible from the left.
+- `3.5` sits exactly at the midpoint of bar 3.
+
+```typescript
+const logicalRange = chart.timeScale().getVisibleLogicalRange();
+// { from: -2.5, to: 9.0 }
+
+// Show bars 0 through 49 with half-bar padding on each side
+chart.timeScale().setVisibleLogicalRange({ from: -0.5, to: 49.5 });
+```
+
+<Tip>
+Logical ranges are particularly useful for aligning multiple charts to show the same number of bars, or for implementing "load more history" patterns when the user scrolls left past bar 0.
+</Tip>
+
+---
+
+## TimeScaleOptions
+
+Configure the time scale at chart creation time or via `applyOptions()`.
+
+```typescript
+import { createChart } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), {
+  timeScale: {
+    barSpacing: 12,          // pixels between bar centers
+    minBarSpacing: 0.5,      // minimum bar spacing (prevents over-zooming)
+    rightOffset: 5,          // empty bars of padding to the right of the last bar
+    fixLeftEdge: false,       // prevent scrolling past the first bar
+    fixRightEdge: false,      // prevent scrolling past the right offset
+    lockVisibleTimeRangeOnResize: false,
+    timeVisible: true,        // show time (HH:MM) in the scale for intraday data
+    secondsVisible: false,
+    shiftVisibleRangeOnNewBar: true, // auto-scroll when new bars arrive
+  },
+});
+```
+
+<Accordion title="Key TimeScaleOptions">
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `barSpacing` | `number` | `6` | Pixels between bar centers |
+| `minBarSpacing` | `number` | `0.5` | Minimum bar spacing on zoom out |
+| `rightOffset` | `number` | `0` | Empty bars of whitespace on the right |
+| `fixLeftEdge` | `boolean` | `false` | Lock the left edge at the first bar |
+| `fixRightEdge` | `boolean` | `false` | Lock the right edge at the right offset |
+| `timeVisible` | `boolean` | `false` | Show HH:MM in scale labels |
+| `secondsVisible` | `boolean` | `true` | Show seconds when time is visible |
+| `shiftVisibleRangeOnNewBar` | `boolean` | `true` | Pan right when a new bar is appended |
+| `lockVisibleTimeRangeOnResize` | `boolean` | `false` | Preserve the visible time range on resize |
+</Accordion>
+
+---
+
+## Scroll and Zoom Controls
+
+### Scrolling
+
+```typescript
+// Returns the distance in bars from the right edge to the last data bar
+const position = chart.timeScale().scrollPosition();
+
+// Scroll to a position (positive = left of the right edge)
+chart.timeScale().scrollToPosition(10, true); // animated
+
+// Snap back to the most recent bar (always animated)
+chart.timeScale().scrollToRealTime();
+```
+
+### Fitting Content
+
+```typescript
+// Resize the scale so all data from all series fits in the viewport
+chart.timeScale().fitContent();
+```
+
+### Reset
+
+```typescript
+// Restore the default zoom level and scroll position
+chart.timeScale().resetTimeScale();
+```
+
+---
+
+## Setting and Getting the Visible Range
+
+<Tabs>
+  <Tab title="Data Range">
+    ```typescript
+    // Set the visible range by timestamp
+    chart.timeScale().setVisibleRange({
+      from: (new Date(Date.UTC(2024, 0, 1))).getTime() / 1000,
+      to:   (new Date(Date.UTC(2024, 5, 30))).getTime() / 1000,
+    });
+
+    // Read it back
+    const range = chart.timeScale().getVisibleRange();
+    if (range) {
+      console.log('Visible from', range.from, 'to', range.to);
+    }
+    ```
+  </Tab>
+  <Tab title="Logical Range">
+    ```typescript
+    // Set the visible range by logical bar index
+    chart.timeScale().setVisibleLogicalRange({ from: 0, to: 99 });
+
+    // Read it back
+    const logRange = chart.timeScale().getVisibleLogicalRange();
+    if (logRange) {
+      console.log('Bars', logRange.from, 'through', logRange.to, 'are visible');
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Coordinate Conversion
+
+The time scale can convert between timestamps, logical indices, and canvas X-coordinates. This is essential for custom overlays and hit-testing.
+
+```typescript
+const timeScale = chart.timeScale();
+
+// Time ↔ coordinate
+const xCoord = timeScale.timeToCoordinate('2024-06-15'); // pixels from left edge
+const timeAt = timeScale.coordinateToTime(320);          // time at x=320px
+
+// Logical index ↔ coordinate
+const xFromIndex = timeScale.logicalToCoordinate(42);   // pixel X for bar 42
+const indexAt    = timeScale.coordinateToLogical(320);  // logical index at x=320px
+```
+
+<Note>
+All coordinate conversion methods return `null` when the input cannot be resolved — for example, when `timeToCoordinate` is called with a time not present in the dataset, or when the chart has no data at all.
+</Note>
+
+---
+
+## Event Subscriptions
+
+Subscribe to changes in the visible range to implement features like lazy loading of historical data or synchronized multi-chart interactions.
+
+### Visible Time Range Change
+
+```typescript
+function handleVisibleTimeRangeChange(range) {
+  if (range === null) return; // no data
+  console.log('Time range changed:', range.from, '→', range.to);
+}
+
+chart.timeScale().subscribeVisibleTimeRangeChange(handleVisibleTimeRangeChange);
+
+// Later, to clean up:
+chart.timeScale().unsubscribeVisibleTimeRangeChange(handleVisibleTimeRangeChange);
+```
+
+### Visible Logical Range Change
+
+```typescript
+function handleLogicalRangeChange(logicalRange) {
+  if (logicalRange === null) return;
+
+  // Load more history if the user has scrolled near the beginning
+  const barsInfo = series.barsInLogicalRange(logicalRange);
+  if (barsInfo && barsInfo.barsBefore < 50) {
+    // fetch and prepend historical data...
+  }
+}
+
+chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRangeChange);
+
+// Clean up:
+chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRangeChange);
+```
+
+<Tip>
+Use `subscribeVisibleLogicalRangeChange` together with `series.barsInLogicalRange()` to implement seamless infinite-scroll historical data loading as the user pans left.
+</Tip>
+
+### Size Change
+
+```typescript
+chart.timeScale().subscribeSizeChange((width, height) => {
+  console.log(`Time scale resized to ${width}×${height}`);
+});
+```
+
+---
+
+## Chart Margin
+
+Two options control the empty space around your data:
+
+- **`barSpacing`** — the pixel width allocated to each bar. Increasing it zooms in.
+- **`rightOffset`** — how many empty bar-widths to leave on the right of the last data point.
+
+If a series has very few data points, there may be visible padding on both sides. Call `fitContent()` to remove it, or use `setVisibleLogicalRange()` to trim margins precisely:
+
+```typescript
+// Remove half-bar padding on both sides
+const vr = chart.timeScale().getVisibleLogicalRange();
+if (vr) {
+  chart.timeScale().setVisibleLogicalRange({
+    from: vr.from + 0.5,
+    to:   vr.to   - 0.5,
+  });
+}
+```
+
+---
+
+## Full ITimeScaleApi Reference
+
+<Accordion title="All ITimeScaleApi methods">
+| Method | Returns | Description |
+|---|---|---|
+| `scrollPosition()` | `number` | Bars from the right edge to the last bar |
+| `scrollToPosition(pos, animated)` | `void` | Scroll to a bar-count position |
+| `scrollToRealTime()` | `void` | Snap to the most recent bar (animated) |
+| `getVisibleRange()` | `IRange \| null` | Current visible data (time) range |
+| `setVisibleRange(range)` | `void` | Set visible range by time value |
+| `getVisibleLogicalRange()` | `LogicalRange \| null` | Current visible logical (index) range |
+| `setVisibleLogicalRange(range)` | `void` | Set visible range by bar index |
+| `resetTimeScale()` | `void` | Restore default zoom and scroll |
+| `fitContent()` | `void` | Auto-fit all series data |
+| `logicalToCoordinate(logical)` | `Coordinate \| null` | Bar index → canvas X |
+| `coordinateToLogical(x)` | `Logical \| null` | Canvas X → bar index |
+| `timeToCoordinate(time)` | `Coordinate \| null` | Time value → canvas X |
+| `coordinateToTime(x)` | `HorzScaleItem \| null` | Canvas X → time value |
+| `timeToIndex(time, findNearest?)` | `TimePointIndex \| null` | Time value → bar index |
+| `width()` | `number` | Time scale width in pixels |
+| `height()` | `number` | Time scale height in pixels |
+| `subscribeVisibleTimeRangeChange(handler)` | `void` | Subscribe to data range changes |
+| `unsubscribeVisibleTimeRangeChange(handler)` | `void` | Unsubscribe from data range changes |
+| `subscribeVisibleLogicalRangeChange(handler)` | `void` | Subscribe to logical range changes |
+| `unsubscribeVisibleLogicalRangeChange(handler)` | `void` | Unsubscribe from logical range changes |
+| `subscribeSizeChange(handler)` | `void` | Subscribe to size changes |
+| `unsubscribeSizeChange(handler)` | `void` | Unsubscribe from size changes |
+| `applyOptions(options)` | `void` | Update time scale options |
+| `options()` | `Readonly<HorzScaleOptions>` | Read current options |
+</Accordion>

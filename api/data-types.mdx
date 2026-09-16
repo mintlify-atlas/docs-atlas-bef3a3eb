@@ -1,0 +1,351 @@
+---
+title: "Data Types Reference for Lightweight Charts Series"
+sidebarTitle: "Data Types"
+description: "All data types for Lightweight Charts series: Time, UTCTimestamp, BusinessDay, WhitespaceData, SingleValueData, BarData, CandlestickData, HistogramData, and BarsInfo."
+---
+
+Lightweight Charts uses a small set of well-defined TypeScript interfaces and type aliases for all data that flows into series. Understanding these types is essential for feeding data correctly, creating whitespace gaps, and working with the time scale. All types are exported directly from the `lightweight-charts` package.
+
+---
+
+## Time Types
+
+### UTCTimestamp
+
+A branded `number` representing seconds elapsed since the Unix epoch (January 1 1970 00:00:00 UTC). This is the correct type for intraday charts or any data source that provides UNIX timestamps.
+
+<Note>
+JavaScript's `Date.now()` returns **milliseconds**. Divide by 1000 before casting to `UTCTimestamp`.
+</Note>
+
+```typescript
+import type { UTCTimestamp } from 'lightweight-charts';
+
+const ts = 1529899200 as UTCTimestamp; // 2018-06-25T04:00:00Z
+const now = (Date.now() / 1000) as UTCTimestamp;
+```
+
+---
+
+### BusinessDay
+
+An object representing a calendar date independent of any time zone. Useful when your data source provides dates without intraday times (end-of-day stock prices, for example).
+
+<ResponseField name="year" type="number" required>
+  The four-digit year (e.g. `2024`).
+</ResponseField>
+<ResponseField name="month" type="number" required>
+  Month number, `1`–`12`.
+</ResponseField>
+<ResponseField name="day" type="number" required>
+  Day of the month, `1`–`31`.
+</ResponseField>
+
+```typescript
+import type { BusinessDay } from 'lightweight-charts';
+
+const date: BusinessDay = { year: 2024, month: 6, day: 15 }; // June 15, 2024
+```
+
+---
+
+### Time
+
+The union type accepted wherever a time value is expected.
+
+```typescript
+type Time = UTCTimestamp | BusinessDay | string;
+```
+
+String values must follow ISO 8601 date format `'YYYY-MM-DD'`. All three representations can be freely mixed within a single series dataset — the library normalises them internally.
+
+```typescript
+const ts: Time = 1529899200 as UTCTimestamp;
+const bd: Time = { year: 2024, month: 1, day: 15 };
+const str: Time = '2024-01-15';
+```
+
+---
+
+### Helper Functions
+
+#### isUTCTimestamp
+
+```typescript
+function isUTCTimestamp(time: Time): time is UTCTimestamp
+```
+
+Returns `true` when `time` is a number (UTC timestamp).
+
+#### isBusinessDay
+
+```typescript
+function isBusinessDay(time: Time): time is BusinessDay
+```
+
+Returns `true` when `time` is an object (business day), i.e. not a number or string.
+
+```typescript
+import { isUTCTimestamp, isBusinessDay } from 'lightweight-charts';
+
+if (isUTCTimestamp(time)) {
+  console.log('Unix seconds:', time);
+} else if (isBusinessDay(time)) {
+  console.log('Calendar date:', time.year, time.month, time.day);
+} else {
+  console.log('ISO string:', time);
+}
+```
+
+---
+
+## Series Data Types
+
+### WhitespaceData\<T\>
+
+A data item that carries a time value but no price. Inserting whitespace items creates visible gaps in the series — the line or bars stop and resume, preserving the correct time positioning.
+
+<ResponseField name="time" type="T" required>
+  The time of the gap.
+</ResponseField>
+<ResponseField name="customValues" type="Record<string, unknown>">
+  Optional metadata. Ignored by the library but accessible to plugins.
+</ResponseField>
+
+```typescript
+import type { WhitespaceData } from 'lightweight-charts';
+
+const gap: WhitespaceData = { time: '2024-01-02' };
+```
+
+---
+
+### SingleValueData\<T\>
+
+The base data type for series that display a single price per bar: **Line**, **Area**, **Baseline**, and **Histogram**.
+
+<ResponseField name="time" type="T" required>
+  The time of the bar.
+</ResponseField>
+<ResponseField name="value" type="number" required>
+  The price or value for this bar.
+</ResponseField>
+<ResponseField name="customValues" type="Record<string, unknown>">
+  Optional metadata ignored by the library.
+</ResponseField>
+
+```typescript
+import type { SingleValueData } from 'lightweight-charts';
+
+const bar: SingleValueData = { time: '2024-01-10', value: 112.50 };
+```
+
+---
+
+### LineData\<T\>
+
+Extends `SingleValueData` with a per-bar color override for the **Line** series.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="value" type="number" required>The price value.</ResponseField>
+<ResponseField name="color" type="string">
+  Override the line color for this specific point. If omitted, the series option color is used.
+</ResponseField>
+
+---
+
+### AreaData\<T\>
+
+Extends `SingleValueData` with per-bar color overrides for the **Area** series.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="value" type="number" required>The price value.</ResponseField>
+<ResponseField name="lineColor" type="string">Per-bar override for the area line color.</ResponseField>
+<ResponseField name="topColor" type="string">Per-bar override for the top gradient color.</ResponseField>
+<ResponseField name="bottomColor" type="string">Per-bar override for the bottom gradient color.</ResponseField>
+
+---
+
+### BaselineData\<T\>
+
+Extends `SingleValueData` with per-bar color overrides for all six fill/line colors of the **Baseline** series.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="value" type="number" required>The price value.</ResponseField>
+<ResponseField name="topFillColor1" type="string">Per-bar top fill gradient color 1.</ResponseField>
+<ResponseField name="topFillColor2" type="string">Per-bar top fill gradient color 2.</ResponseField>
+<ResponseField name="topLineColor" type="string">Per-bar top line color.</ResponseField>
+<ResponseField name="bottomFillColor1" type="string">Per-bar bottom fill gradient color 1.</ResponseField>
+<ResponseField name="bottomFillColor2" type="string">Per-bar bottom fill gradient color 2.</ResponseField>
+<ResponseField name="bottomLineColor" type="string">Per-bar bottom line color.</ResponseField>
+
+---
+
+### HistogramData\<T\>
+
+Extends `SingleValueData` with a per-bar column color for the **Histogram** series.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="value" type="number" required>The column height value.</ResponseField>
+<ResponseField name="color" type="string">
+  Per-bar column color. Overrides the series `color` option for this specific bar.
+</ResponseField>
+
+```typescript
+// Volume histogram with color-coded bars
+const volumeData: HistogramData[] = [
+  { time: '2024-01-08', value: 1_250_000, color: '#26a69a' }, // up day
+  { time: '2024-01-09', value: 980_000,  color: '#ef5350' }, // down day
+  { time: '2024-01-10', value: 1_100_000, color: '#26a69a' },
+];
+```
+
+---
+
+### OhlcData\<T\>
+
+The base type for series that require four price fields. Shared by `BarData` and `CandlestickData`.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="open" type="number" required>Opening price.</ResponseField>
+<ResponseField name="high" type="number" required>Highest price.</ResponseField>
+<ResponseField name="low" type="number" required>Lowest price.</ResponseField>
+<ResponseField name="close" type="number" required>Closing price.</ResponseField>
+
+---
+
+### BarData\<T\>
+
+Extends `OhlcData` with an optional per-bar color for the **Bar** series.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="open" type="number" required>Opening price.</ResponseField>
+<ResponseField name="high" type="number" required>High price.</ResponseField>
+<ResponseField name="low" type="number" required>Low price.</ResponseField>
+<ResponseField name="close" type="number" required>Closing price.</ResponseField>
+<ResponseField name="color" type="string">Per-bar color override.</ResponseField>
+
+---
+
+### CandlestickData\<T\>
+
+Extends `OhlcData` with per-bar color overrides for body, border, and wick for the **Candlestick** series.
+
+<ResponseField name="time" type="T" required>The bar time.</ResponseField>
+<ResponseField name="open" type="number" required>Opening price.</ResponseField>
+<ResponseField name="high" type="number" required>High price.</ResponseField>
+<ResponseField name="low" type="number" required>Low price.</ResponseField>
+<ResponseField name="close" type="number" required>Closing price.</ResponseField>
+<ResponseField name="color" type="string">Override body color for this candle.</ResponseField>
+<ResponseField name="borderColor" type="string">Override border color for this candle.</ResponseField>
+<ResponseField name="wickColor" type="string">Override wick color for this candle.</ResponseField>
+
+---
+
+### CustomData\<T\>
+
+The base interface for custom series data. It extends `CustomSeriesWhitespaceData` and adds an optional `color` property used for the price line and price scale label.
+
+<ResponseField name="time" type="T" required>The time of the data point.</ResponseField>
+<ResponseField name="color" type="string">
+  Optional color for the price line and price scale label for this data point.
+</ResponseField>
+<ResponseField name="customValues" type="Record<string, unknown>">
+  Optional extra metadata; ignored by the library but available to plugins.
+</ResponseField>
+
+Extend `CustomData` with your own fields when building a custom series:
+
+```typescript
+interface MyData extends CustomData {
+  time: string;
+  value: number;
+  volume: number;
+  signal: 'buy' | 'sell' | 'hold';
+}
+```
+
+---
+
+## Usage Examples
+
+<Tabs>
+  <Tab title="OHLCV Candlestick">
+    ```typescript
+    import { CandlestickData, WhitespaceData } from 'lightweight-charts';
+
+    const candleData: CandlestickData[] = [
+      { time: '2024-01-01', open: 100, high: 105, low: 98,  close: 103 },
+      { time: '2024-01-02', open: 103, high: 108, low: 101, close: 107 },
+      { time: '2024-01-03', open: 107, high: 112, low: 105, close: 110 },
+    ];
+    candleSeries.setData(candleData);
+    ```
+  </Tab>
+  <Tab title="Whitespace Gaps">
+    ```typescript
+    import type { BarData, WhitespaceData } from 'lightweight-charts';
+
+    // Mix bars and whitespace gaps in the same array
+    const mixedData: (BarData | WhitespaceData)[] = [
+      { time: '2024-01-01', open: 100, high: 105, low: 98, close: 103 },
+      { time: '2024-01-02' }, // whitespace — weekend gap
+      { time: '2024-01-03' }, // whitespace — weekend gap
+      { time: '2024-01-04', open: 103, high: 110, low: 101, close: 108 },
+    ];
+    barSeries.setData(mixedData);
+    ```
+  </Tab>
+  <Tab title="Colored Histogram">
+    ```typescript
+    import type { HistogramData } from 'lightweight-charts';
+
+    const volData: HistogramData[] = bars.map((bar) => ({
+      time: bar.time,
+      value: bar.volume,
+      color: bar.close >= bar.open ? '#26a69a' : '#ef5350',
+    }));
+    volumeSeries.setData(volData);
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## BarsInfo
+
+Returned by `series.barsInLogicalRange(range)`. Used to determine how much data exists outside the current viewport — the foundation for implementing infinite scroll / lazy data loading.
+
+<ResponseField name="barsBefore" type="number">
+  Number of series bars that exist before (to the left of) the `from` logical index.
+  - **Positive** — that many bars exist to the left of the visible area.
+  - **Negative** — the first bar of the series is inside the visible area, and the absolute value is the number of empty logical positions to the left of it.
+</ResponseField>
+
+<ResponseField name="barsAfter" type="number">
+  Number of series bars that exist after (to the right of) the `to` logical index.
+  - **Positive** — that many bars exist to the right of the visible area.
+  - **Negative** — the last bar of the series is inside the visible area.
+</ResponseField>
+
+<ResponseField name="from" type="HorzScaleItem" optional>
+  The time value of the first bar in the range, if any data exists in the range.
+</ResponseField>
+
+<ResponseField name="to" type="HorzScaleItem" optional>
+  The time value of the last bar in the range, if any data exists in the range.
+</ResponseField>
+
+```typescript
+const range = chart.timeScale().getVisibleLogicalRange();
+if (range) {
+  const info = series.barsInLogicalRange(range);
+  if (info !== null) {
+    console.log(`Bars before visible area: ${info.barsBefore}`);
+    console.log(`Bars after visible area: ${info.barsAfter}`);
+    if (info.barsBefore < 20) {
+      // Trigger a fetch of older data
+    }
+  }
+}
+```

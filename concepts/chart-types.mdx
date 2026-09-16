@@ -1,0 +1,199 @@
+---
+title: "Lightweight Charts Chart Types: Standard, Yield & Options"
+sidebarTitle: "Chart Types"
+description: "Compare the three Lightweight Charts creation functions — createChart, createYieldCurveChart, and createOptionsChart — and learn when to use each one."
+---
+
+Lightweight Charts provides three factory functions for creating chart instances, each optimized for a different use case. The choice of factory determines how the horizontal scale behaves — whether it is driven by timestamps, fixed monthly duration units, or a numeric price axis. All three chart types share the same series API and support the same series types.
+
+<Info>
+Every factory function returns an `IChartApi` instance. You can use the same `addSeries()`, `timeScale()`, `priceScale()`, and other methods regardless of which factory you chose.
+</Info>
+
+---
+
+## Standard Time-Based Chart
+
+The standard chart is the most common type and is suitable for virtually any time series data. The horizontal axis displays time values derived from UTC timestamps or calendar business days.
+
+- **Factory function**: `createChart(container, options?)`
+- **Horizontal scale**: Time-based (UTC timestamps or business days)
+- **Use case**: General-purpose financial and time series charting
+
+```typescript
+import { createChart, CandlestickSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), {
+  layout: {
+    background: { type: 'solid', color: '#ffffff' },
+    textColor: '#333333',
+  },
+  width: 800,
+  height: 400,
+});
+
+const candlestickSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+candlestickSeries.setData([
+  { time: '2024-01-01', open: 100, high: 106, low: 97,  close: 104 },
+  { time: '2024-01-02', open: 104, high: 110, low: 102, close: 107 },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Tip>
+Pass `autoSize: true` in chart options to have the chart automatically resize when its container element changes dimensions (uses a `ResizeObserver` internally).
+</Tip>
+
+---
+
+## Yield Curve Chart
+
+The Yield Curve chart is tailored for displaying yield curves and similar fixed-income data. Instead of plotting against calendar time, its horizontal axis is a **linearly spaced scale measured in monthly duration units** (e.g., 1 month, 3 months, 6 months, 1 year, 2 years, 10 years, 30 years). Whitespace is ignored for crosshair snapping and grid lines, which keeps the chart clean even when data points are irregularly spaced in calendar time.
+
+- **Factory function**: `createYieldCurveChart(container, options?)`
+- **Horizontal scale**: Linearly spaced monthly duration units
+- **Key differences from standard chart**:
+  - Whitespace gaps are ignored for crosshair positioning and grid rendering
+  - The `yieldCurve` option block controls scale behaviour
+  - Designed for instantaneous snapshots of a yield curve, not time evolution
+
+```typescript
+import { createYieldCurveChart, LineSeries } from 'lightweight-charts';
+
+const chart = createYieldCurveChart(document.getElementById('container'), {
+  layout: {
+    background: { type: 'solid', color: '#ffffff' },
+    textColor: '#333333',
+  },
+  yieldCurve: {
+    baseResolution: 1,      // months per logical unit
+    minimumTimeRange: 10,   // minimum visible range in months
+    startTimeRange: 3,      // offset at the left edge
+  },
+  handleScroll: false,
+  handleScale: false,
+});
+
+const lineSeries = chart.addSeries(LineSeries, { color: '#2962ff' });
+
+// time values are durations in months
+lineSeries.setData([
+  { time: 1,   value: 5.378 },
+  { time: 3,   value: 5.271 },
+  { time: 6,   value: 5.094 },
+  { time: 12,  value: 4.739 },
+  { time: 24,  value: 4.237 },
+  { time: 60,  value: 3.887 },
+  { time: 120, value: 4.007 },
+  { time: 360, value: 4.290 },
+]);
+
+chart.timeScale().fitContent();
+```
+
+### Yield Curve Options
+
+<Accordion title="yieldCurve configuration block">
+| Option | Type | Description |
+|---|---|---|
+| `baseResolution` | `number` | Number of months represented by one logical bar unit. Increase to compress long-dated maturities. Default: `1` |
+| `minimumTimeRange` | `number` | Minimum number of months the visible range must span. Prevents over-zooming on sparse data. Default: `10` |
+| `startTimeRange` | `number` | Left-edge offset in months from the first data point. Default: `3` |
+</Accordion>
+
+<Tip>
+If you want more visual space around short-dated maturities without distorting the overall scale, increase `minBarSpacing` in `TimeScaleOptions` and compensate by setting a larger `baseResolution` (e.g. `12`) to keep the long end from spreading too wide.
+</Tip>
+
+---
+
+## Options Chart (Price-Based)
+
+The Options chart replaces the time axis with a **numeric price axis**. This makes it ideal for visualizing option chains, payoff diagrams, implied volatility surfaces, or any dataset where the underlying price is the natural x-axis rather than a date.
+
+- **Factory function**: `createOptionsChart(container, options?)`
+- **Horizontal scale**: Numeric (price-based)
+- **Use case**: Option chains, payoff curves, probability distributions, or any price-vs-value relationship
+
+```typescript
+import { createOptionsChart, LineSeries, AreaSeries } from 'lightweight-charts';
+
+const chart = createOptionsChart(document.getElementById('container'), {
+  layout: {
+    background: { type: 'solid', color: '#ffffff' },
+    textColor: '#333333',
+  },
+  width: 800,
+  height: 400,
+});
+
+// x-axis values are underlying prices, not timestamps
+const payoffSeries = chart.addSeries(AreaSeries, {
+  lineColor: '#2962ff',
+  topColor: 'rgba(41, 98, 255, 0.3)',
+  bottomColor: 'rgba(41, 98, 255, 0.0)',
+});
+
+payoffSeries.setData([
+  { time: 80,  value: 0   },
+  { time: 90,  value: 0   },
+  { time: 100, value: 0   },
+  { time: 110, value: 10  },
+  { time: 120, value: 20  },
+  { time: 130, value: 30  },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Note>
+In an Options chart, the `time` field in your data items represents a **price level**, not a calendar date or duration. Name it `time` in your data objects as required by the series API, but treat its value as an underlying asset price.
+</Note>
+
+---
+
+## Choosing the Right Chart Type
+
+<CardGroup cols={3}>
+  <Card title="createChart" icon="clock">
+    **Use when** your x-axis is calendar time — daily OHLC, intraday price feeds, economic time series, or any data timestamped with dates.
+  </Card>
+  <Card title="createYieldCurveChart" icon="wave-sine">
+    **Use when** you need to plot yield curves, term structures, or forward rate curves where the x-axis represents time-to-maturity in months.
+  </Card>
+  <Card title="createOptionsChart" icon="dollar-sign">
+    **Use when** the x-axis represents price levels — option payoffs, implied volatility by strike, or probability distributions.
+  </Card>
+</CardGroup>
+
+---
+
+## Custom Horizontal Scale
+
+For advanced scenarios that don't fit the three built-in factories, you can define a completely custom horizontal scale behavior using the low-level `createChartEx` API.
+
+```typescript
+import { createChartEx, defaultHorzScaleBehavior } from 'lightweight-charts';
+
+// Extend or wrap the default horizontal scale behavior
+const CustomBehavior = defaultHorzScaleBehavior();
+// Override methods as needed...
+
+const chart = createChartEx(
+  document.getElementById('container'),
+  new CustomBehavior(),
+  { width: 800, height: 400 }
+);
+```
+
+<Warning>
+`createChartEx` is an advanced API intended for library integrators and plugin authors. For the vast majority of use cases, prefer one of the three named factory functions above.
+</Warning>

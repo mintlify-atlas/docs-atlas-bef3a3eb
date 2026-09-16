@@ -1,0 +1,386 @@
+---
+title: "ITimeScaleApi: Time Scale Control Reference"
+sidebarTitle: "ITimeScaleApi"
+description: "Full reference for ITimeScaleApi — scroll position, visible ranges, coordinate conversion, event subscriptions, and options for the Lightweight Charts time axis."
+---
+
+`ITimeScaleApi<HorzScaleItem>` is the interface returned by `chart.timeScale()`. It gives you complete control over the horizontal axis: scrolling, zooming, fitting data, converting between time values and pixel coordinates, and subscribing to viewport-change events. It is the central building block for features like infinite scroll, programmatic navigation, and time-based annotations.
+
+---
+
+## Scroll Control
+
+### scrollPosition
+
+Returns the distance from the right edge of the time scale to the last bar of the series, measured in bars.
+
+**Returns:** `number`
+
+```typescript
+const pos = chart.timeScale().scrollPosition();
+console.log(`Bars from right edge: ${pos}`);
+```
+
+---
+
+### scrollToPosition
+
+Scrolls the chart to a target position (distance in bars from the right edge).
+
+<ParamField body="position" type="number" required>
+  Target bar-distance from the right edge. Positive values scroll left; negative values scroll to the right of the last bar.
+</ParamField>
+
+<ParamField body="animated" type="boolean" required>
+  When `true`, the transition is animated smoothly. When `false`, the jump is immediate.
+</ParamField>
+
+```typescript
+// Jump immediately to 50 bars before the last bar
+chart.timeScale().scrollToPosition(50, false);
+
+// Smoothly scroll to the latest bar
+chart.timeScale().scrollToPosition(0, true);
+```
+
+---
+
+### scrollToRealTime
+
+Scrolls to the most recent bar with a smooth animation. Equivalent to `scrollToPosition(0, true)`.
+
+```typescript
+chart.timeScale().scrollToRealTime();
+```
+
+---
+
+## Range Control
+
+### getVisibleRange
+
+Returns the current visible time range using actual time values from the data. Returns `null` if the chart has no data.
+
+<Note>
+This method can only return times that exist in the dataset. For the full viewport range including empty space, use `getVisibleLogicalRange` combined with `series.barsInLogicalRange`.
+</Note>
+
+**Returns:** `IRange<HorzScaleItem> | null`
+
+```typescript
+const range = chart.timeScale().getVisibleRange();
+if (range) {
+  console.log('Visible from:', range.from, 'to:', range.to);
+}
+```
+
+---
+
+### setVisibleRange
+
+Sets the visible time range using actual time values. If the requested range extends beyond existing data boundaries, it is automatically clipped to the available data range.
+
+<ParamField body="range" type="IRange<HorzScaleItem>" required>
+  Object with `from` and `to` time values.
+</ParamField>
+
+```typescript
+chart.timeScale().setVisibleRange({
+  from: (new Date(Date.UTC(2024, 0, 1)).getTime() / 1000) as UTCTimestamp,
+  to:   (new Date(Date.UTC(2024, 2, 1)).getTime() / 1000) as UTCTimestamp,
+});
+```
+
+---
+
+### getVisibleLogicalRange
+
+Returns the visible range as logical indices (bar numbers). The `from` and `to` values may be fractional and may extend beyond the data — they represent canvas positions, not data positions.
+
+**Returns:** `LogicalRange | null`
+
+```typescript
+const logRange = chart.timeScale().getVisibleLogicalRange();
+if (logRange) {
+  console.log(`Visible logical range: ${logRange.from} – ${logRange.to}`);
+}
+```
+
+---
+
+### setVisibleLogicalRange
+
+Sets the visible range using logical (bar index) coordinates. Unlike `setVisibleRange`, this can address positions outside the current data range, which is useful for pre-positioning the viewport.
+
+<ParamField body="range" type="IRange<number>" required>
+  Object with numeric `from` and `to` logical indices.
+</ParamField>
+
+```typescript
+// Show bars 0 through 99
+chart.timeScale().setVisibleLogicalRange({ from: 0, to: 99 });
+```
+
+---
+
+### fitContent
+
+Automatically adjusts the visible range to fit all series data.
+
+```typescript
+chart.timeScale().fitContent();
+```
+
+---
+
+### resetTimeScale
+
+Resets the time scale to its default zoom level and scroll position.
+
+```typescript
+chart.timeScale().resetTimeScale();
+```
+
+---
+
+## Coordinate Conversion
+
+### timeToCoordinate
+
+Converts a time value to a canvas X-coordinate (pixels from the left of the chart).
+
+<ParamField body="time" type="HorzScaleItem" required>
+  The time value to look up.
+</ParamField>
+
+**Returns:** `Coordinate | null` — `null` if the time does not exist in the dataset.
+
+```typescript
+const x = chart.timeScale().timeToCoordinate('2024-01-15');
+if (x !== null) console.log(`X pixel for Jan 15: ${x}`);
+```
+
+---
+
+### coordinateToTime
+
+Converts a canvas X-coordinate to the time of the bar at that position.
+
+<ParamField body="x" type="number" required>
+  Pixel distance from the left edge of the time scale.
+</ParamField>
+
+**Returns:** `HorzScaleItem | null` — `null` if there is no bar at that coordinate.
+
+```typescript
+const time = chart.timeScale().coordinateToTime(320);
+console.log('Time at x=320px:', time);
+```
+
+---
+
+### logicalToCoordinate
+
+Converts a logical index to a canvas X-coordinate.
+
+<ParamField body="logical" type="Logical" required>
+  The logical bar index (may be fractional or out of data bounds).
+</ParamField>
+
+**Returns:** `Coordinate | null`
+
+```typescript
+const x = chart.timeScale().logicalToCoordinate(50);
+```
+
+---
+
+### coordinateToLogical
+
+Converts a canvas X-coordinate to a logical index (may be fractional).
+
+<ParamField body="x" type="number" required>
+  Pixel distance from the left edge.
+</ParamField>
+
+**Returns:** `Logical | null`
+
+---
+
+### timeToIndex
+
+Converts a time value to its time-scale index (`TimePointIndex`). Pass `findNearest: true` to return the closest index when no exact match exists.
+
+<ParamField body="time" type="HorzScaleItem" required>
+  The time value to look up.
+</ParamField>
+
+<ParamField body="findNearest" type="boolean">
+  Whether to return the nearest index if there is no exact match.
+</ParamField>
+
+**Returns:** `TimePointIndex | null`
+
+---
+
+## Dimensions
+
+### width
+
+Returns the current width of the time scale area in pixels.
+
+**Returns:** `number`
+
+### height
+
+Returns the current height of the time scale bar in pixels.
+
+**Returns:** `number`
+
+---
+
+## Event Subscriptions
+
+### subscribeVisibleTimeRangeChange / unsubscribeVisibleTimeRangeChange
+
+Subscribe to changes in the visible time range. The handler receives the new range (or `null` if no data).
+
+<ParamField body="handler" type="TimeRangeChangeEventHandler<HorzScaleItem>" required>
+  `(timeRange: IRange<HorzScaleItem> | null) => void`
+</ParamField>
+
+```typescript
+const onRangeChange = (range) => {
+  if (!range) return;
+  console.log('Visible time range changed:', range.from, '–', range.to);
+};
+
+chart.timeScale().subscribeVisibleTimeRangeChange(onRangeChange);
+// Later:
+chart.timeScale().unsubscribeVisibleTimeRangeChange(onRangeChange);
+```
+
+---
+
+### subscribeVisibleLogicalRangeChange / unsubscribeVisibleLogicalRangeChange
+
+Subscribe to changes in the visible logical range. This fires on every scroll and zoom event. The handler receives a `LogicalRange` (or `null`).
+
+<ParamField body="handler" type="LogicalRangeChangeEventHandler" required>
+  `(logicalRange: LogicalRange | null) => void`
+</ParamField>
+
+This is the recommended event for implementing infinite scroll because logical indices can extend beyond the data bounds:
+
+```typescript
+chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+  if (!range) return;
+  const barsInfo = series.barsInLogicalRange(range);
+  if (barsInfo !== null && barsInfo.barsBefore < 50) {
+    // Fetch more historical data and prepend
+    loadHistoricalData().then((data) => {
+      series.setData([...data, ...existingData]);
+    });
+  }
+});
+```
+
+---
+
+### subscribeSizeChange / unsubscribeSizeChange
+
+Subscribe to changes in the time scale's pixel dimensions. The handler receives the new `width` and `height`.
+
+<ParamField body="handler" type="SizeChangeEventHandler" required>
+  `(width: number, height: number) => void`
+</ParamField>
+
+```typescript
+chart.timeScale().subscribeSizeChange((width, height) => {
+  console.log(`Time scale resized: ${width}×${height}px`);
+});
+```
+
+---
+
+## Options
+
+### applyOptions
+
+Applies a partial `TimeScaleOptions` (also called `HorzScaleOptions`) object. Only the specified keys are updated.
+
+<ParamField body="options" type="DeepPartial<HorzScaleOptions>" required>
+  Any subset of time scale options.
+</ParamField>
+
+```typescript
+chart.timeScale().applyOptions({
+  timeVisible: true,
+  secondsVisible: false,
+  rightOffset: 5,
+  barSpacing: 10,
+});
+```
+
+---
+
+### options
+
+Returns the complete set of currently applied time scale options.
+
+**Returns:** `Readonly<HorzScaleOptions>`
+
+---
+
+## Infinite Scroll Pattern
+
+Combining `subscribeVisibleLogicalRangeChange` with `series.barsInLogicalRange` is the standard approach for lazy-loading historical data:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    let isLoading = false;
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(async (range) => {
+      if (!range || isLoading) return;
+
+      const barsInfo = series.barsInLogicalRange(range);
+      if (barsInfo === null || barsInfo.barsBefore >= 50) return;
+
+      isLoading = true;
+      try {
+        const oldest = existingData[0]?.time;
+        const moreData = await fetchBefore(oldest);
+        if (moreData.length > 0) {
+          existingData = [...moreData, ...existingData];
+          series.setData(existingData);
+        }
+      } finally {
+        isLoading = false;
+      }
+    });
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    var isLoading = false;
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(function(range) {
+      if (!range || isLoading) return;
+
+      var barsInfo = series.barsInLogicalRange(range);
+      if (barsInfo === null || barsInfo.barsBefore >= 50) return;
+
+      isLoading = true;
+      var oldest = existingData[0] ? existingData[0].time : null;
+      fetchBefore(oldest).then(function(moreData) {
+        if (moreData.length > 0) {
+          existingData = moreData.concat(existingData);
+          series.setData(existingData);
+        }
+        isLoading = false;
+      });
+    });
+    ```
+  </Tab>
+</Tabs>

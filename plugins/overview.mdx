@@ -1,0 +1,124 @@
+---
+title: "Lightweight Charts Plugin System Overview Guide"
+sidebarTitle: "Overview"
+description: "Learn how to extend Lightweight Charts with custom series types, drawing tools, indicators, and watermarks using the three plugin types."
+---
+
+Plugins let you extend Lightweight Charts™ beyond the built-in series types and chart elements. Whether you want to draw an annotation directly on a series, render a watermark across an entire pane, or introduce a brand-new chart type with its own data schema, there is a dedicated plugin type designed for each scenario. Every plugin hooks into the same canvas rendering pipeline the library uses internally, so custom elements integrate seamlessly with scrolling, zooming, and crosshair behavior.
+
+## Choosing a plugin type
+
+Pick the plugin type that matches your goal. The decision usually comes down to one question: does your element own its own data, or does it decorate something that already exists?
+
+<Tip>
+  If it visualizes its own data, build a **custom series**. If it decorates an existing series or reacts to its scales, build a **series primitive**. If it belongs to the pane as a whole and is independent of any series, build a **pane primitive**. Series primitives can also render on the price and time scales; pane primitives cannot.
+</Tip>
+
+| Goal | Plugin type | Attach with |
+|------|-------------|-------------|
+| Drawing tool, annotation, or overlay tied to a series and its scales | Series primitive | `ISeriesApi.attachPrimitive()` |
+| Pane-wide element independent of any series (watermark, background) | Pane primitive | `IPaneApi.attachPrimitive()` |
+| New series type with custom data structure and rendering | Custom series | `IChartApi.addCustomSeries()` |
+
+## Development workflow
+
+<Steps>
+  <Step title="Scaffold your project">
+    Run the project generator to create a ready-to-run plugin project:
+
+    ```bash
+    npm create lwc-plugin@latest
+    ```
+
+    The [create-lwc-plugin](https://www.npmjs.com/package/create-lwc-plugin) package prompts you to choose a plugin type and sets up a TypeScript project with all the boilerplate already in place.
+  </Step>
+
+  <Step title="Implement the plugin interface">
+    Follow the guide for your chosen plugin type. Each type has a specific interface to implement:
+
+    <CardGroup cols={3}>
+      <Card title="Series Primitives" icon="layer-group" href="/plugins/series-primitives">
+        Decorate an existing series. Implement `ISeriesPrimitive` with `paneViews()`, `priceAxisViews()`, and `timeAxisViews()`.
+      </Card>
+      <Card title="Pane Primitives" icon="image" href="/plugins/pane-primitives">
+        Add a chart-wide element. Implement `IPanePrimitive` with `paneViews()` only.
+      </Card>
+      <Card title="Custom Series" icon="chart-line" href="/plugins/custom-series">
+        Define a new series type. Implement `ICustomSeriesPaneView` with `renderer()`, `update()`, and `priceValueBuilder()`.
+      </Card>
+    </CardGroup>
+  </Step>
+
+  <Step title="Render with the Canvas rendering target">
+    All plugin renderers receive a `CanvasRenderingTarget2D` instance. Use its two coordinate spaces to draw pixel-perfect graphics:
+
+    - **`useBitmapCoordinateSpace`** — physical device pixels, ideal for crisp 1 px lines
+    - **`useMediaCoordinateSpace`** — CSS pixels, ideal for text and layout
+
+    See the [Canvas rendering target](/plugins/canvas-rendering) guide for full details.
+  </Step>
+
+  <Step title="Learn from plugin examples">
+    The [Plugin examples demo](https://tradingview.github.io/lightweight-charts/plugin-examples) hosts interactive examples of heatmaps, alert lines, watermarks, and tooltips. Their full source code lives in the [`plugin-examples`](https://github.com/tradingview/lightweight-charts/tree/master/plugin-examples) folder of the repository.
+  </Step>
+</Steps>
+
+## Built-in plugins
+
+Lightweight Charts ships several ready-to-use plugin utilities in the main package. You can use them directly or study them as reference implementations.
+
+<CardGroup cols={2}>
+  <Card title="createTextWatermark" icon="font">
+    Renders one or more lines of text as a watermark on a pane.
+
+    ```typescript
+    createTextWatermark(pane, options)
+    ```
+
+    Attach to any pane via `chart.panes()[0]`. Supports per-line font size, weight, style, and color.
+  </Card>
+  <Card title="createImageWatermark" icon="image">
+    Renders an image element as a watermark on a pane.
+
+    ```typescript
+    createImageWatermark(pane, imageElement, options)
+    ```
+
+    Accepts `maxWidth`, `maxHeight`, `padding`, and `alpha` options to control layout and opacity.
+  </Card>
+  <Card title="createSeriesMarkers" icon="flag">
+    Places text or shape markers at specific data points on a series.
+
+    ```typescript
+    createSeriesMarkers(series, markers)
+    ```
+
+    Returns a markers primitive you can update at any time by calling its `setMarkers()` method.
+  </Card>
+  <Card title="createUpDownMarkers" icon="arrows-up-down">
+    Adds directional up/down arrow markers to a series automatically based on price movement.
+
+    ```typescript
+    createUpDownMarkers(series, options)
+    ```
+
+    Useful for highlighting trend direction without writing custom rendering code.
+  </Card>
+</CardGroup>
+
+## Further reading
+
+<CardGroup cols={3}>
+  <Card title="Series Primitives" icon="layer-group" href="/plugins/series-primitives">
+    Deep dive into the `ISeriesPrimitive` interface, view layers, axis labels, and lifecycle hooks.
+  </Card>
+  <Card title="Pane Primitives" icon="image" href="/plugins/pane-primitives">
+    How to attach chart-wide overlays to a pane and use the built-in watermark helpers.
+  </Card>
+  <Card title="Custom Series" icon="chart-line" href="/plugins/custom-series">
+    Define a new series type with its own data schema, renderer, and options.
+  </Card>
+  <Card title="Canvas Rendering" icon="paintbrush" href="/plugins/canvas-rendering">
+    Bitmap vs. media coordinate spaces, pixel-perfect tips, and context save/restore patterns.
+  </Card>
+</CardGroup>

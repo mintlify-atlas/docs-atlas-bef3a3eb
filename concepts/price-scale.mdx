@@ -1,0 +1,258 @@
+---
+title: "Price Scale Configuration in Lightweight Charts"
+sidebarTitle: "Price Scale"
+description: "Learn how to configure left, right, and overlay price scales, choose scale modes, and use the IPriceScaleApi to control visible ranges programmatically."
+---
+
+The **price scale** (also called the price axis) is the vertical axis on a Lightweight Charts chart. It converts price values to canvas Y-coordinates and back, ensuring that every series is rendered at the correct vertical position. The conversion depends on the current scale mode, the chart height, and the portion of data that is visible at any given moment.
+
+---
+
+## Default Price Scales
+
+By default, every chart has two visible price scales: **left** and **right**. Series are attached to the right price scale unless configured otherwise. Both scales are always present — you can hide them but not remove them entirely.
+
+```typescript
+import { createChart, LineSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), {
+  rightPriceScale: {
+    visible: true,
+    borderColor: '#cccccc',
+  },
+  leftPriceScale: {
+    visible: false, // hide the left scale
+  },
+});
+
+const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+```
+
+<Note>
+To hide a built-in scale, set its `visible` option to `false`. Removing left and right price scales entirely is not supported; use overlay scales when you need scales that do not appear in the UI.
+</Note>
+
+---
+
+## Overlay Price Scales
+
+Overlay price scales are hidden scales that let you plot additional series (such as volume) without distorting the main price axis. They are created implicitly when you assign a custom `priceScaleId` to a series.
+
+```typescript
+import { createChart, LineSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+
+// Main price series — uses the default right scale
+const priceSeries = chart.addSeries(LineSeries, {
+  color: '#2962ff',
+  priceScaleId: 'right',
+});
+
+// Volume indicator — uses an overlay scale that won't affect the price axis
+const volumeSeries = chart.addSeries(HistogramSeries, {
+  color: '#26a69a',
+  priceScaleId: 'volume-pane', // any unique string creates an overlay scale
+  priceFormat: { type: 'volume' },
+});
+
+priceSeries.setData([
+  { time: '2024-01-01', value: 100 },
+  { time: '2024-01-02', value: 105 },
+]);
+volumeSeries.setData([
+  { time: '2024-01-01', value: 1200000 },
+  { time: '2024-01-02', value: 980000  },
+]);
+```
+
+<Info>
+An overlay price scale exists as long as at least one series is attached to it. Removing all series assigned to a given `priceScaleId` automatically destroys that overlay scale.
+</Info>
+
+---
+
+## Price Scale Modes
+
+The `PriceScaleMode` enum controls how price values are mapped to canvas coordinates.
+
+<Tabs>
+  <Tab title="Normal">
+    Linear mapping — equal price differences produce equal pixel distances. This is the default.
+
+    ```typescript
+    import { PriceScaleMode } from 'lightweight-charts';
+
+    chart.applyOptions({
+      rightPriceScale: { mode: PriceScaleMode.Normal },
+    });
+    ```
+  </Tab>
+  <Tab title="Logarithmic">
+    Logarithmic mapping — useful for assets that compound (e.g., a long-term equity chart where percentage moves matter more than absolute points).
+
+    ```typescript
+    import { PriceScaleMode } from 'lightweight-charts';
+
+    chart.applyOptions({
+      rightPriceScale: { mode: PriceScaleMode.Logarithmic },
+    });
+    ```
+  </Tab>
+  <Tab title="Percentage">
+    Rescales all values relative to the first visible bar, displaying percentage changes from that reference point.
+
+    ```typescript
+    import { PriceScaleMode } from 'lightweight-charts';
+
+    chart.applyOptions({
+      rightPriceScale: { mode: PriceScaleMode.Percentage },
+    });
+    ```
+  </Tab>
+  <Tab title="IndexedTo100">
+    Similar to Percentage mode but normalizes the first visible bar to 100, making it easy to compare multiple series on a common baseline.
+
+    ```typescript
+    import { PriceScaleMode } from 'lightweight-charts';
+
+    chart.applyOptions({
+      rightPriceScale: { mode: PriceScaleMode.IndexedTo100 },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Accordion title="PriceScaleMode enum values">
+| Value | Name | Description |
+|---|---|---|
+| `0` | `Normal` | Linear scale (default) |
+| `1` | `Logarithmic` | Log scale — equal percentage moves have equal height |
+| `2` | `Percentage` | First visible bar = 0%, all others relative |
+| `3` | `IndexedTo100` | First visible bar = 100, all others proportional |
+</Accordion>
+
+---
+
+## Modifying Price Scale Options
+
+Price scale options can be set at chart creation time or updated later via `applyOptions()`.
+
+<Tabs>
+  <Tab title="At creation">
+    ```typescript
+    const chart = createChart(document.getElementById('container'), {
+      rightPriceScale: {
+        mode: PriceScaleMode.Normal,
+        autoScale: true,
+        borderVisible: true,
+        borderColor: '#cccccc',
+        scaleMargins: {
+          top: 0.1,    // 10% margin above the highest price
+          bottom: 0.1, // 10% margin below the lowest price
+        },
+      },
+      overlayPriceScales: {
+        scaleMargins: {
+          top: 0.7,    // push overlay series to the bottom 30%
+          bottom: 0,
+        },
+      },
+    });
+    ```
+  </Tab>
+  <Tab title="On the fly">
+    ```typescript
+    // Update right scale margins dynamically
+    chart.applyOptions({
+      rightPriceScale: {
+        scaleMargins: { top: 0.05, bottom: 0.2 },
+      },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## IPriceScaleApi
+
+`IPriceScaleApi` provides programmatic control over any price scale. Retrieve it through the chart or through a series.
+
+```typescript
+// From the chart — specify the scale ID and optionally a pane index
+const rightScale = chart.priceScale('right');
+const leftScale  = chart.priceScale('left');
+const overlay    = chart.priceScale('volume-pane', 0);
+
+// From a series — returns the scale the series is currently attached to
+const seriesScale = myLineSeries.priceScale();
+```
+
+<Warning>
+The `IPriceScaleApi` object returned by `series.priceScale()` is bound to the price scale ID and pane at the moment of the call. If you later move the series to a different pane or change its `priceScaleId`, you must call `series.priceScale()` again to get a fresh reference.
+</Warning>
+
+### API Reference
+
+<Accordion title="IPriceScaleApi methods">
+| Method | Signature | Description |
+|---|---|---|
+| `applyOptions` | `(options: DeepPartial<PriceScaleOptions>) => void` | Update any subset of price scale options |
+| `options` | `() => Readonly<PriceScaleOptions>` | Return all currently applied options |
+| `width` | `() => number` | Return the visible width of the scale in pixels (0 if hidden) |
+| `setVisibleRange` | `(range: { from: number; to: number }) => void` | Pin the visible price range |
+| `getVisibleRange` | `() => { from: number; to: number } \| null` | Return the current visible price range |
+| `setAutoScale` | `(on: boolean) => void` | Enable or disable automatic vertical scaling |
+</Accordion>
+
+---
+
+## Example: Volume Indicator in an Overlay Pane
+
+A common pattern is to combine a price chart with a volume histogram that uses an overlay scale so that volume bars do not compete with the price axis.
+
+```typescript
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'), {
+  height: 400,
+  rightPriceScale: {
+    scaleMargins: { top: 0.05, bottom: 0.2 }, // leave room for volume
+  },
+  overlayPriceScales: {
+    scaleMargins: { top: 0.8, bottom: 0 }, // volume occupies bottom 20%
+  },
+});
+
+const priceSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+const volumeSeries = chart.addSeries(HistogramSeries, {
+  priceScaleId: 'overlay-volume',
+  priceFormat: { type: 'volume' },
+});
+
+priceSeries.setData([
+  { time: '2024-01-01', open: 100, high: 106, low: 97,  close: 104 },
+  { time: '2024-01-02', open: 104, high: 110, low: 102, close: 107 },
+  { time: '2024-01-03', open: 107, high: 108, low: 99,  close: 101 },
+]);
+
+volumeSeries.setData([
+  { time: '2024-01-01', value: 1200000, color: '#26a69a' },
+  { time: '2024-01-02', value: 1850000, color: '#26a69a' },
+  { time: '2024-01-03', value: 980000,  color: '#ef5350' },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Tip>
+Using `scaleMargins` on the right price scale (e.g. `bottom: 0.2`) combined with matching `overlayPriceScales` margins (e.g. `top: 0.8`) creates a clean split where price occupies the top 80% and volume sits at the bottom 20% — all within a single pane.
+</Tip>

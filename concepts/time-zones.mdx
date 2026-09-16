@@ -1,0 +1,173 @@
+---
+title: "Handling Time Zones in Lightweight Charts"
+sidebarTitle: "Time Zones"
+description: "Lightweight Charts uses UTC only. Learn timezone adjustment helpers, DST handling, performance trade-offs, and when not to convert your timestamps."
+---
+
+Lightweight Charts processes every date and time value in **UTC**. The library does not have built-in time zone support, and this is an intentional design decision to keep the bundle small and performance high. If your users need to see prices displayed in their local time zone — or in a specific market's session time — you adjust the timestamps in your data before passing them to the chart.
+
+<Warning>
+Do not rely on the browser's system time zone or JavaScript's `Date` object local-time behavior when preparing chart data. Always work from UTC timestamps and apply any offset explicitly.
+</Warning>
+
+---
+
+## The Core Principle
+
+The library treats every timestamp as a UTC moment and displays it as-is on the time axis. To display data in a different time zone, shift each timestamp by the appropriate UTC offset **before** calling `setData()` or `update()`.
+
+For example, if a bar's actual UTC time is `2024-01-15T10:00:00Z` and you want it to appear as `13:00` on the chart (UTC+3, e.g. Moscow), you add 3 hours to the timestamp:
+
+```
+display_time = utc_time + timezone_offset_seconds
+```
+
+The chart then renders `display_time` as if it were UTC, which visually shows the local time your users expect.
+
+<Info>
+This approach means the timestamps stored in your chart data are not "true" UTC — they are UTC-shifted values that look correct when displayed by a UTC-only renderer. Keep this in mind if you need to round-trip those values back to real UTC.
+</Info>
+
+---
+
+## Converting Timestamps: Pure JavaScript
+
+The simplest approach uses the browser's built-in `toLocaleString` to resolve IANA time zone offsets without any external dependencies.
+
+```javascript
+/**
+ * Shift a UTC Unix timestamp (seconds) so that it displays as
+ * local time in the given IANA time zone on a UTC-only chart.
+ *
+ * @param {number} originalTime - UTC timestamp in seconds
+ * @param {string} timeZone     - IANA zone identifier, e.g. 'America/New_York'
+ * @returns {number}            - Shifted timestamp in seconds
+ */
+function timeToTz(originalTime, timeZone) {
+    const zonedDate = new Date(
+        new Date(originalTime * 1000).toLocaleString('en-US', { timeZone })
+    );
+    return zonedDate.getTime() / 1000;
+}
+
+// Usage
+const data = rawData.map(bar => ({
+    ...bar,
+    time: timeToTz(bar.time, 'America/New_York'),
+}));
+
+series.setData(data);
+```
+
+### Client (Local) Time Zone Shortcut
+
+If you only need to support the browser's own time zone (without specifying a named zone), use the following lighter helper:
+
+```javascript
+function timeToLocal(originalTime) {
+    const d = new Date(originalTime * 1000);
+    return Date.UTC(
+        d.getFullYear(), d.getMonth(),  d.getDate(),
+        d.getHours(),    d.getMinutes(), d.getSeconds(),
+        d.getMilliseconds()
+    ) / 1000;
+}
+```
+
+<Note>
+The `toLocaleString`-based approach is convenient but slow for large datasets. In informal benchmarks, processing 100 000 data points takes over 20 seconds. For production use with large historical datasets, consider the performance-optimised approach described below.
+</Note>
+
+---
+
+## Converting Timestamps: Using date-fns-tz
+
+If `date-fns-tz` is already in your project, `utcToZonedTime` offers a cleaner API:
+
+```javascript
+import { utcToZonedTime } from 'date-fns-tz';
+
+function timeToTz(originalTime, timeZone) {
+    const zonedDate = utcToZonedTime(new Date(originalTime * 1000), timeZone);
+    return zonedDate.getTime() / 1000;
+}
+```
+
+<Note>
+`date-fns-tz` is also slow for large batches (~18 s for 100 000 items). It is best suited for smaller datasets or when you already depend on the library for other date formatting tasks.
+</Note>
+
+---
+
+## High-Performance Approach: IANA tzdata
+
+For applications that process large historical datasets (tens of thousands of bars), the `tzdata` npm package lets you look up UTC offsets directly from the IANA database:
+
+1. Find the correct UTC offset for the **first** timestamp using a binary search on the zone's transition table.
+2. Walk the remaining timestamps in order, checking only whether a DST transition has occurred since the last bar.
+
+This avoids the per-call overhead of `toLocaleString` and reduces the problem to a single lookup plus sequential comparisons.
+
+```typescript
+// Pseudo-code sketch — implementation varies by tzdata version
+import { find } from 'tzdata';
+
+function convertBatchToTz(bars, timeZone) {
+    const zone = find(timeZone);
+    let offsetSeconds = zone.utcOffsetAt(bars[0].time);
+
+    return bars.map(bar => {
+        // Check if a DST transition has occurred
+        const newOffset = zone.utcOffsetAt(bar.time);
+        if (newOffset !== offsetSeconds) offsetSeconds = newOffset;
+
+        return { ...bar, time: bar.time + offsetSeconds };
+    });
+}
+```
+
+<Tip>
+The `tzdata` package adds approximately **29.9 kB** to your bundle — roughly the same size as the Lightweight Charts library itself. Only add it if you genuinely need high-throughput time zone conversion.
+</Tip>
+
+---
+
+## DST Considerations
+
+Daylight Saving Time introduces non-uniform offsets throughout the year. Any correct time zone conversion must account for DST transitions. All three approaches above handle this automatically, because:
+
+- `toLocaleString` uses the browser's OS-level tz database.
+- `date-fns-tz` bundles its own tz database.
+- `tzdata` exposes the raw IANA transition tables.
+
+What you must **not** do is apply a fixed offset (e.g. always `+3600 * 5`). This will be correct in winter but wrong during summer for zones that observe DST.
+
+```javascript
+// ❌ Wrong — ignores DST
+const shifted = bar.time + 5 * 3600;
+
+// ✅ Correct — uses IANA database to resolve the actual offset
+const shifted = timeToTz(bar.time, 'America/New_York');
+```
+
+---
+
+## Business Day Data
+
+If your series uses **calendar business days** (`'2024-01-15'` string format) without an explicit time component, you typically should **not** apply a time zone conversion. Business day data represents a date, not a moment in time, so shifting it by hours could move bars to the wrong date.
+
+<Info>
+Only apply time zone adjustments to data that carries a meaningful intraday time component (Unix timestamps, ISO strings with `T...Z` suffixes). Leave date-only strings (`'YYYY-MM-DD'`) as-is.
+</Info>
+
+---
+
+## Why Lightweight Charts Doesn't Handle This Internally
+
+The library deliberately leaves time zone handling to the application for three reasons:
+
+1. **Performance** — The pure-JS and `date-fns-tz` approaches are too slow for large datasets at the library level.
+2. **Bundle size** — Bundling the IANA tz database would nearly double the library's footprint.
+3. **Opt-in cost** — The majority of use cases (daily OHLC data, UTC timestamps) don't need time zone conversion at all.
+
+By keeping this logic out of the library, users who need it can choose the right trade-off for their application, while everyone else pays zero cost.

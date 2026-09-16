@@ -1,0 +1,265 @@
+---
+title: "Adding Text and Image Watermarks to Charts"
+sidebarTitle: "Watermarks"
+description: "Add branded text or logo image overlays to chart panes using createTextWatermark and createImageWatermark, with full configuration and removal examples."
+---
+
+Lightweight Charts includes two built-in watermark plugins: `createTextWatermark` for styled multi-line text overlays, and `createImageWatermark` for logo or image overlays. Both are pane primitives — they attach to a specific pane rather than to the chart itself, which means you can display different watermarks across multiple panes on the same chart.
+
+## Text watermark
+
+The `createTextWatermark` function renders one or more lines of styled text centered (by default) over the chart pane. It's ideal for ticker symbols, company names, or "for internal use" labels.
+
+### Basic usage
+
+```typescript
+import { createChart, createTextWatermark } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), { height: 400 });
+const pane = chart.panes()[0];
+
+const textWatermark = createTextWatermark(pane, {
+  horzAlign: 'center',
+  vertAlign: 'center',
+  lines: [
+    {
+      text: 'AAPL',
+      fontSize: 48,
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      color: 'rgba(0, 0, 0, 0.15)',
+    },
+    {
+      text: 'Apple Inc.',
+      fontSize: 24,
+      color: 'rgba(0, 0, 0, 0.10)',
+    },
+  ],
+});
+```
+
+### Multi-line text with custom fonts
+
+Each entry in the `lines` array is rendered on a separate line. You can mix fonts and sizes freely:
+
+```typescript
+const textWatermark = createTextWatermark(pane, {
+  horzAlign: 'center',
+  vertAlign: 'center',
+  lines: [
+    {
+      text: 'CONFIDENTIAL',
+      fontSize: 36,
+      fontWeight: 'bold',
+      fontFamily: 'monospace',
+      color: 'rgba(239, 83, 80, 0.2)',
+      lineSpacing: 8,
+    },
+    {
+      text: 'Internal use only',
+      fontSize: 16,
+      fontStyle: 'italic',
+      color: 'rgba(239, 83, 80, 0.15)',
+    },
+  ],
+});
+```
+
+### Text watermark options
+
+<Accordion title="TextWatermarkOptions reference">
+
+**Top-level options**
+
+| Option | Type | Description |
+|---|---|---|
+| `horzAlign` | `'left'` \| `'center'` \| `'right'` | Horizontal alignment of the watermark block. Default: `'center'`. |
+| `vertAlign` | `'top'` \| `'center'` \| `'bottom'` | Vertical alignment of the watermark block. Default: `'center'`. |
+| `lines` | `TextWatermarkLineOptions[]` | Array of line definitions. Each produces one rendered line of text. |
+
+**Per-line options (`TextWatermarkLineOptions`)**
+
+| Option | Type | Description |
+|---|---|---|
+| `text` | `string` | The text to render. |
+| `fontSize` | `number` | Font size in pixels. |
+| `fontFamily` | `string` | CSS font family string. |
+| `fontWeight` | `string` | CSS font weight (e.g. `'bold'`, `'400'`). |
+| `fontStyle` | `string` | CSS font style (e.g. `'italic'`, `'normal'`). |
+| `color` | `string` | CSS color string. Use `rgba()` for transparency. |
+| `lineSpacing` | `number` | Extra vertical spacing (pixels) below this line. |
+
+</Accordion>
+
+### Updating watermark options
+
+The watermark returned by `createTextWatermark` has an `applyOptions` method for live updates:
+
+```typescript
+// Change alignment after creation
+textWatermark.applyOptions({
+  horzAlign: 'left',
+  vertAlign: 'bottom',
+});
+
+// Update a line's color
+textWatermark.applyOptions({
+  lines: [
+    { text: 'AAPL', fontSize: 48, color: 'rgba(41, 98, 255, 0.2)' },
+  ],
+});
+```
+
+### Removing a text watermark
+
+Call `detach()` on the returned wrapper to remove it from the pane:
+
+```typescript
+textWatermark.detach();
+```
+
+## Image watermark
+
+The `createImageWatermark` function displays a scaled image (PNG, SVG, or any browser-supported format) as a pane overlay. Pass the image URL as a string — the library loads it asynchronously and renders it once the image has loaded.
+
+### Basic usage
+
+```typescript
+import { createChart, createImageWatermark } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), { height: 400 });
+const pane = chart.panes()[0];
+
+const imageWatermark = createImageWatermark(pane, '/logo.png', {
+  alpha: 0.5,
+  padding: 20,
+});
+```
+
+### Image watermark options
+
+<Accordion title="ImageWatermarkOptions reference">
+
+| Option | Type | Description |
+|---|---|---|
+| `alpha` | `number` | Opacity of the image, from `0` (invisible) to `1` (fully opaque). Default: `1`. |
+| `padding` | `number` | Minimum padding (pixels) between the image edges and the pane boundary. |
+| `maxWidth` | `number` | Maximum rendered width in pixels. The image is scaled down if it exceeds this. |
+| `maxHeight` | `number` | Maximum rendered height in pixels. The image is scaled down if it exceeds this. |
+
+</Accordion>
+
+### Using a programmatically created image
+
+You can pass an image URL string directly. The library creates the `HTMLImageElement` for you:
+
+```typescript
+const imageWatermark = createImageWatermark(chart.panes()[0], '/images/brand-logo.svg', {
+  alpha: 0.3,
+  padding: 24,
+  maxWidth: 200,
+  maxHeight: 80,
+});
+```
+
+### Updating image watermark options
+
+Like the text watermark, the returned wrapper supports `applyOptions`:
+
+```typescript
+// Reduce opacity on dark mode
+imageWatermark.applyOptions({ alpha: 0.15 });
+
+// Increase padding
+imageWatermark.applyOptions({ padding: 40 });
+```
+
+### Removing an image watermark
+
+```typescript
+imageWatermark.detach();
+```
+
+## Watermarks on multiple panes
+
+Both watermark functions accept any pane reference, not just the first one. If your chart has multiple panes (for example, price in pane 0 and volume in pane 1), you can watermark each independently:
+
+```typescript
+const panes = chart.panes();
+
+const priceWatermark = createTextWatermark(panes[0], {
+  lines: [{ text: 'AAPL', fontSize: 48, color: 'rgba(0,0,0,0.1)' }],
+});
+
+const volumeWatermark = createTextWatermark(panes[1], {
+  lines: [{ text: 'Volume', fontSize: 20, color: 'rgba(0,0,0,0.1)' }],
+  vertAlign: 'top',
+});
+```
+
+## Full example
+
+```typescript
+import { createChart, createTextWatermark, createImageWatermark } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), {
+  width: 800,
+  height: 500,
+});
+
+const pane = chart.panes()[0];
+
+// Add a ticker watermark
+const ticker = createTextWatermark(pane, {
+  horzAlign: 'center',
+  vertAlign: 'center',
+  lines: [
+    {
+      text: 'TSLA',
+      fontSize: 64,
+      fontWeight: 'bold',
+      color: 'rgba(0, 0, 0, 0.08)',
+    },
+    {
+      text: 'Tesla, Inc.',
+      fontSize: 28,
+      color: 'rgba(0, 0, 0, 0.06)',
+    },
+  ],
+});
+
+// Add a logo in the corner
+const logo = createImageWatermark(pane, '/brand/logo.png', {
+  alpha: 0.25,
+  padding: 16,
+  maxWidth: 120,
+  maxHeight: 40,
+});
+
+// Remove both when done
+function cleanup() {
+  ticker.detach();
+  logo.detach();
+}
+```
+
+<Note>
+  Both `createTextWatermark` and `createImageWatermark` are exported directly from `'lightweight-charts'`. You do not need a separate plugin package.
+</Note>
+
+## API reference
+
+<CardGroup cols={2}>
+  <Card title="createTextWatermark" icon="font" href="https://tradingview.github.io/lightweight-charts/docs/api/functions/createTextWatermark">
+    Creates a multi-line styled text overlay on a pane.
+  </Card>
+  <Card title="createImageWatermark" icon="image" href="https://tradingview.github.io/lightweight-charts/docs/api/functions/createImageWatermark">
+    Creates an image overlay on a pane from a URL string.
+  </Card>
+  <Card title="TextWatermarkOptions" icon="sliders" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/TextWatermarkOptions">
+    Full options reference for the text watermark plugin.
+  </Card>
+  <Card title="ImageWatermarkOptions" icon="sliders" href="https://tradingview.github.io/lightweight-charts/docs/api/interfaces/ImageWatermarkOptions">
+    Full options reference for the image watermark plugin.
+  </Card>
+</CardGroup>

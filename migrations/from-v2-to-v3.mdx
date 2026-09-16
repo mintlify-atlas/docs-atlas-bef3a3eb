@@ -1,0 +1,168 @@
+---
+title: "Lightweight Charts v2 to v3 Migration Guide"
+sidebarTitle: "v2 → v3"
+description: "Upgrade Lightweight Charts from v2 to v3: dual price scales, new time scale subscription API, overlay series, and price scale positioning changes."
+---
+
+Lightweight Charts v3 is a major release that introduces dual price scale support and a more consistent time scale API. The primary goal of these changes was to allow left and right price scales to coexist independently, which required restructuring how price scale options are specified. Most existing code can be migrated with small, targeted changes.
+
+<Warning>
+  Version 3 contains **breaking changes** to the price scale and time scale APIs. The old `priceScale` option and `chart.subscribeVisibleTimeRangeChange` method are deprecated and will be **fully removed** in v4. Migrate now to avoid a second breaking change on the next upgrade.
+</Warning>
+
+## Time Scale API
+
+The `subscribeVisibleTimeRangeChange` and `unsubscribeVisibleTimeRangeChange` methods have been moved from the chart object to the `ITimeScaleApi` object. This makes the subscription model consistent with the new `subscribeVisibleLogicalRangeChange` API introduced in v3.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    // v2 — subscriptions on the chart object
+    chart.subscribeVisibleTimeRangeChange(handler);
+    chart.unsubscribeVisibleTimeRangeChange(handler);
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    // v3 — subscriptions on the time scale object
+    chart.timeScale().subscribeVisibleTimeRangeChange(handler);
+    chart.timeScale().unsubscribeVisibleTimeRangeChange(handler);
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  While migrating, also consider adopting the new `subscribeVisibleLogicalRangeChange` method on `ITimeScaleApi` for finer-grained control over the visible range.
+</Note>
+
+---
+
+## Two Price Scales
+
+V3 introduces independent left and right price scales. The old single `priceScale` option is deprecated in favour of separate `leftPriceScale` and `rightPriceScale` options. The sections below cover each common configuration scenario.
+
+### Left Price Scale
+
+To display the price scale on the left side of the chart, disable the right scale and enable the left scale explicitly. Assign series to the left scale using `priceScaleId: 'left'`.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const chart = LightweightCharts.createChart(container, {
+        priceScale: {
+            position: 'left',
+        },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const chart = LightweightCharts.createChart(container, {
+        rightPriceScale: {
+            visible: false,
+        },
+        leftPriceScale: {
+            visible: true,
+        },
+    });
+
+    // Assign the series to the left scale
+    const histSeries = chart.addHistogramSeries({
+        priceScaleId: 'left',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### No Price Scale
+
+To hide all price scales, set both `leftPriceScale.visible` and `rightPriceScale.visible` to `false`.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const chart = LightweightCharts.createChart(container, {
+        priceScale: {
+            position: 'none',
+        },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const chart = LightweightCharts.createChart(container, {
+        leftPriceScale: {
+            visible: false,
+        },
+        rightPriceScale: {
+            visible: false,
+        },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Creating Overlay Series
+
+To create an overlay series that shares the chart area without its own price scale, replace `overlay: true` with `priceScaleId: ''`. Any non-`'left'` / non-`'right'` string ID creates a floating scale; an empty string is the convention for overlays.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const histogramSeries = chart.addHistogramSeries({
+        overlay: true,
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const histogramSeries = chart.addHistogramSeries({
+        priceScaleId: '',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Moving Price Scale Side at Runtime
+
+Dynamically switching the price scale from right to left requires updating both scale visibility options **and** reassigning the series. The old single `priceScale.position` option does not support this in v3.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const chart = LightweightCharts.createChart(container);
+    const mainSeries = chart.addLineSeries();
+
+    // Later — switch side
+    chart.applyOptions({
+        priceScale: {
+            position: 'left',
+        },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const chart = LightweightCharts.createChart(container);
+    const mainSeries = chart.addLineSeries();
+
+    // Later — switch side
+    chart.applyOptions({
+        leftPriceScale: {
+            visible: true,
+        },
+        rightPriceScale: {
+            visible: false,
+        },
+    });
+
+    mainSeries.applyOptions({
+        priceScaleId: 'left',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Dynamically moving a price scale side is **not** supported through the old `priceScale.position` API in v3. You must use the pattern above or the series will not follow the scale change.
+</Warning>

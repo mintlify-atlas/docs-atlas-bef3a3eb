@@ -1,0 +1,282 @@
+---
+title: "Using Lightweight Charts in a React Application"
+sidebarTitle: "React Integration"
+description: "Learn how to embed Lightweight Charts in React functional components using useRef and useEffect, with cleanup, auto-resize, and TypeScript support."
+---
+
+Lightweight Charts is a plain DOM library — it creates a `<canvas>` element inside a container div you provide. React does not own that canvas, so the trick is to hand React's DOM ref to the library and manage the chart's full lifecycle inside a `useEffect`. This page walks you through a minimal working setup, then adds auto-resize and common patterns for real applications.
+
+## Installation
+
+<Steps>
+
+### Install the package
+
+```bash
+npm install lightweight-charts
+```
+
+### Create your chart component
+
+Add a `div` ref for the container and create the chart inside `useEffect`. Always return a cleanup function that calls `chart.remove()` — this releases the canvas, event listeners, and internal timers.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```tsx
+    import { useEffect, useRef } from 'react';
+    import { createChart, LineSeries, IChartApi } from 'lightweight-charts';
+
+    function Chart() {
+      const containerRef = useRef<HTMLDivElement>(null);
+      const chartRef = useRef<IChartApi | null>(null);
+
+      useEffect(() => {
+        if (!containerRef.current) return;
+
+        const chart = createChart(containerRef.current, {
+          width: containerRef.current.clientWidth,
+          height: 300,
+        });
+        chartRef.current = chart;
+
+        const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+        series.setData([
+          { time: '2024-01-01', value: 100 },
+          { time: '2024-01-02', value: 105 },
+          { time: '2024-01-03', value: 98 },
+          { time: '2024-01-04', value: 112 },
+        ]);
+
+        chart.timeScale().fitContent();
+
+        return () => {
+          chart.remove();
+        };
+      }, []);
+
+      return <div ref={containerRef} />;
+    }
+
+    export default Chart;
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```jsx
+    import { useEffect, useRef } from 'react';
+    import { createChart, LineSeries } from 'lightweight-charts';
+
+    function Chart() {
+      const containerRef = useRef(null);
+      const chartRef = useRef(null);
+
+      useEffect(() => {
+        if (!containerRef.current) return;
+
+        const chart = createChart(containerRef.current, {
+          width: containerRef.current.clientWidth,
+          height: 300,
+        });
+        chartRef.current = chart;
+
+        const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+        series.setData([
+          { time: '2024-01-01', value: 100 },
+          { time: '2024-01-02', value: 105 },
+          { time: '2024-01-03', value: 98 },
+          { time: '2024-01-04', value: 112 },
+        ]);
+
+        chart.timeScale().fitContent();
+
+        return () => {
+          chart.remove();
+        };
+      }, []);
+
+      return <div ref={containerRef} />;
+    }
+
+    export default Chart;
+    ```
+  </Tab>
+</Tabs>
+
+### Render the component
+
+Import and use `<Chart />` anywhere in your application. Give the container a fixed height via CSS or an inline `style` if you want predictable sizing without relying on the `height` option.
+
+```tsx
+import Chart from './Chart';
+
+export default function App() {
+  return (
+    <main>
+      <h1>Price Chart</h1>
+      <Chart />
+    </main>
+  );
+}
+```
+
+</Steps>
+
+## Auto-resize with ResizeObserver
+
+Charts created with an explicit `width` value do not resize automatically. Use a `ResizeObserver` to watch the container and call `chart.resize()` whenever its dimensions change.
+
+```tsx
+useEffect(() => {
+  if (!containerRef.current) return;
+
+  const chart = createChart(containerRef.current, {
+    width: containerRef.current.clientWidth,
+    height: 300,
+  });
+  chartRef.current = chart;
+
+  // ... add series and data ...
+
+  const resizeObserver = new ResizeObserver(entries => {
+    if (!entries.length || !chartRef.current) return;
+    const { width, height } = entries[0].contentRect;
+    chartRef.current.resize(width, height);
+  });
+
+  resizeObserver.observe(containerRef.current);
+
+  return () => {
+    resizeObserver.disconnect();
+    chart.remove();
+  };
+}, []);
+```
+
+<Tip>
+  Pass `autoSize: true` in the chart options to let Lightweight Charts manage resizing internally via its own built-in `ResizeObserver`. This is the simplest approach when you don't need to intercept resize events yourself.
+
+  ```tsx
+  const chart = createChart(containerRef.current, {
+    autoSize: true,
+    height: 300,
+  });
+  ```
+</Tip>
+
+## Accessing the chart instance
+
+Store the chart in a `useRef` (not `useState`) so that reading or updating it never triggers a re-render.
+
+<Warning>
+  Never read `chartRef.current` during the render phase of your component. The chart is only guaranteed to exist inside `useEffect` callbacks or event handlers — not during JSX evaluation.
+</Warning>
+
+```tsx
+// ✅ Safe: inside an event handler
+function handleFitContent() {
+  if (chartRef.current) {
+    chartRef.current.timeScale().fitContent();
+  }
+}
+
+// ❌ Unsafe: during render
+// const scale = chartRef.current?.timeScale(); // may be null on first render
+```
+
+## Passing series options as props
+
+Extend the component to accept configuration as props for reuse:
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { createChart, LineSeries, IChartApi, LineSeriesPartialOptions } from 'lightweight-charts';
+
+interface ChartProps {
+  color?: string;
+  height?: number;
+  data: { time: string; value: number }[];
+}
+
+function Chart({ color = '#2962ff', height = 300, data }: ChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const chart = createChart(containerRef.current, {
+      autoSize: true,
+      height,
+    });
+    chartRef.current = chart;
+
+    const series = chart.addSeries(LineSeries, { color });
+    series.setData(data);
+    chart.timeScale().fitContent();
+
+    return () => {
+      chart.remove();
+    };
+  }, []); // intentionally empty: chart is created once
+
+  return <div ref={containerRef} style={{ height }} />;
+}
+```
+
+## Multi-component architecture
+
+For larger applications, you can split the chart into a parent `Chart` component and child `Series` components. The key challenge is that React runs child `useEffect` calls before parent ones during mount, but cleans them up in reverse order during unmount.
+
+To share the chart instance with child components, use `useImperativeHandle` and `createContext`:
+
+```tsx
+import { createContext, useContext, useEffect, useRef, forwardRef } from 'react';
+import { createChart, IChartApi } from 'lightweight-charts';
+
+const ChartContext = createContext<IChartApi | null>(null);
+
+export const ChartContainer = forwardRef<IChartApi, { children: React.ReactNode }>(
+  ({ children }, ref) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const chartRef = useRef<IChartApi | null>(null);
+
+    useEffect(() => {
+      if (!containerRef.current) return;
+      const chart = createChart(containerRef.current, { autoSize: true, height: 400 });
+      chartRef.current = chart;
+      return () => {
+        chart.remove();
+        chartRef.current = null;
+      };
+    }, []);
+
+    return (
+      <ChartContext.Provider value={chartRef.current}>
+        <div ref={containerRef}>{children}</div>
+      </ChartContext.Provider>
+    );
+  }
+);
+
+// Child series component
+export function LineSeries({ color = '#2962ff' }) {
+  const chart = useContext(ChartContext);
+  // ... use chart to add a series
+}
+```
+
+<Note>
+  Because hooks execute bottom-up during mount, child components should guard against a `null` chart context and wait for the parent's effect to complete. Using a ref-based context (rather than state) avoids triggering extra re-renders.
+</Note>
+
+## Community wrappers
+
+If you prefer a fully pre-built React wrapper with declarative components, check out these community packages:
+
+<CardGroup cols={2}>
+  <Card title="lightweight-charts-react-wrapper" icon="github" href="https://github.com/trash-and-fire/lightweight-charts-react-wrapper">
+    A declarative React wrapper with Chart, Series, and PriceLine components.
+  </Card>
+  <Card title="lightweight-charts-react-components" icon="github" href="https://github.com/ukorvl/lightweight-charts-react-components">
+    Lightweight component library with TypeScript support for Lightweight Charts.
+  </Card>
+</CardGroup>

@@ -1,0 +1,414 @@
+---
+title: "Series Options Reference for Lightweight Charts"
+sidebarTitle: "Series Options"
+description: "Comprehensive options reference for all Lightweight Charts series types: shared SeriesOptionsCommon plus Line, Area, Bar, Candlestick, Baseline, and Histogram style options."
+---
+
+Every series type in Lightweight Charts shares a common base of options defined in `SeriesOptionsCommon`. On top of that, each series type adds its own style-specific options. All options can be passed at creation time or applied later via `series.applyOptions()`. Only the keys you provide are changed — unspecified keys keep their current values.
+
+<Tip>
+Pass options as `DeepPartial` — you never need to supply every field. The library merges your partial options with the current defaults.
+</Tip>
+
+---
+
+## SeriesOptionsCommon
+
+Options shared by all series types regardless of their visual style.
+
+<ResponseField name="title" type="string" default='""'>
+  A label shown next to the last price on the price scale. Useful for identifying overlapping series.
+</ResponseField>
+
+<ResponseField name="visible" type="boolean" default="true">
+  Controls series visibility. Hiding a series also hides all its price lines, markers, and labels — but unlike removing, it does not affect the timeline.
+</ResponseField>
+
+<ResponseField name="priceScaleId" type="string" default='"right" or "left"'>
+  The ID of the price scale to attach this series to. Use `'right'` or `'left'` for the main axis scales, or an arbitrary string to create an overlay scale. Use an empty string `''` for an overlay with no axis.
+</ResponseField>
+
+<ResponseField name="priceFormat" type="PriceFormat" default='{ type: "price", precision: 2, minMove: 0.01 }'>
+  Controls how prices are formatted on the price axis and tooltip.
+  <Expandable title="PriceFormatBuiltIn">
+    <ResponseField name="type" type='"price" | "volume" | "percent"'>
+      - `'price'` — standard decimal formatting (most common)
+      - `'volume'` — abbreviated with K/M suffixes (e.g. `12.5M`)
+      - `'percent'` — appends a `%` sign
+    </ResponseField>
+    <ResponseField name="precision" type="number" default="auto">
+      Number of decimal places. Auto-calculated from `minMove` if not specified.
+    </ResponseField>
+    <ResponseField name="minMove" type="number" default="0.01">
+      Minimum price step. Setting `minMove: 0.5` rounds prices to the nearest 0.5.
+    </ResponseField>
+    <ResponseField name="base" type="number">
+      Alternative to `minMove`; set to `1 / minMove`. Useful when `minMove` is very small (e.g. `1e-18`) due to floating-point limitations.
+    </ResponseField>
+  </Expandable>
+  <Expandable title="PriceFormatCustom">
+    <ResponseField name="type" type='"custom"' required>
+      Marks this as a custom format.
+    </ResponseField>
+    <ResponseField name="formatter" type="(price: number) => string" required>
+      Custom formatting function. Called for each price label on the axis.
+    </ResponseField>
+    <ResponseField name="tickmarksFormatter" type="(prices: number[]) => string[]">
+      Optional batch formatter called with all visible tick prices; useful when labels should be aligned or truncated based on the full set.
+    </ResponseField>
+    <ResponseField name="minMove" type="number" default="0.01">
+      Minimum price step.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="autoscaleInfoProvider" type="(baseImpl: () => AutoscaleInfo | null) => AutoscaleInfo | null">
+  Override the automatic price-range calculation. The `baseImpl` argument is the library's default implementation; call it to get the starting range, then adjust as needed.
+
+  ```typescript
+  // Fix the visible range to 0–100 regardless of data
+  series = chart.addSeries(LineSeries, {
+    autoscaleInfoProvider: () => ({
+      priceRange: { minValue: 0, maxValue: 100 },
+    }),
+  });
+
+  // Expand the auto range by ±10 units
+  series = chart.addSeries(LineSeries, {
+    autoscaleInfoProvider: (original) => {
+      const res = original();
+      if (res !== null) {
+        res.priceRange.minValue -= 10;
+        res.priceRange.maxValue += 10;
+      }
+      return res;
+    },
+  });
+  ```
+</ResponseField>
+
+<ResponseField name="lastValueVisible" type="boolean" default="true">
+  Whether to show the last value label on the price scale axis.
+</ResponseField>
+
+<ResponseField name="priceLineVisible" type="boolean" default="true">
+  Show the automatic horizontal price line at the series' most recent price.
+</ResponseField>
+
+<ResponseField name="priceLineSource" type="PriceLineSource" default="PriceLineSource.LastBar">
+  Data source for the automatic price line: `LastBar` (0) uses the last data point; `LastVisible` (1) uses the last visible bar on screen.
+</ResponseField>
+
+<ResponseField name="priceLineWidth" type="number" default="1">
+  Width of the automatic price line in pixels.
+</ResponseField>
+
+<ResponseField name="priceLineColor" type="string" default='""'>
+  Color of the automatic price line. Defaults to the series' last bar color.
+</ResponseField>
+
+<ResponseField name="priceLineStyle" type="LineStyle" default="LineStyle.Dashed">
+  Style of the automatic price line: `0` Solid, `1` Dotted, `2` Dashed, `3` LargeDashed, `4` SparseDotted.
+</ResponseField>
+
+<ResponseField name="baseLineVisible" type="boolean" default="true">
+  Visibility of the base line, used in `Percentage` and `IndexedTo100` scale modes.
+</ResponseField>
+
+<ResponseField name="baseLineColor" type="string" default='"#B2B5BE"'>
+  Base line color in `IndexedTo100` scale mode.
+</ResponseField>
+
+<ResponseField name="baseLineWidth" type="number" default="1">
+  Base line width in pixels.
+</ResponseField>
+
+<ResponseField name="baseLineStyle" type="LineStyle" default="LineStyle.Solid">
+  Base line style.
+</ResponseField>
+
+<ResponseField name="hitTestTolerance" type="number" default="3">
+  Additional tolerance in CSS pixels applied during mouse hit testing for the series.
+</ResponseField>
+
+<ResponseField name="conflationThresholdFactor" type="number">
+  Per-series conflation aggressiveness override. `1.0` = conflate only when the display cannot show more detail; `4.0` = strong smoothing. Defaults to the global time scale option when not set.
+</ResponseField>
+
+---
+
+## LineStyleOptions
+
+Used by the **Line** series (`chart.addSeries(LineSeries, options)`).
+
+<ResponseField name="color" type="string" default='"#2196f3"'>
+  The line color.
+</ResponseField>
+
+<ResponseField name="lineWidth" type="LineWidth" default="3">
+  Line thickness in pixels. Valid values are `1`, `2`, `3`, or `4`.
+</ResponseField>
+
+<ResponseField name="lineStyle" type="LineStyle" default="LineStyle.Solid">
+  Line dash pattern: `0` Solid, `1` Dotted, `2` Dashed, `3` LargeDashed, `4` SparseDotted.
+</ResponseField>
+
+<ResponseField name="lineType" type="LineType" default="LineType.Simple">
+  Line interpolation: `0` Simple (straight segments), `1` WithSteps (staircase), `2` Curved (smooth bezier).
+</ResponseField>
+
+<ResponseField name="lineVisible" type="boolean" default="true">
+  Whether to draw the line itself (you may hide the line while keeping point markers).
+</ResponseField>
+
+<ResponseField name="pointMarkersVisible" type="boolean" default="false">
+  Draw a circle marker at each data point.
+</ResponseField>
+
+<ResponseField name="pointMarkersRadius" type="number">
+  Radius of the circle markers in pixels. Defaults to `lineWidth + 2` when not set.
+</ResponseField>
+
+<ResponseField name="crosshairMarkerVisible" type="boolean" default="true">
+  Show the circular crosshair marker when hovering.
+</ResponseField>
+
+<ResponseField name="crosshairMarkerRadius" type="number" default="4">
+  Radius of the crosshair marker in pixels.
+</ResponseField>
+
+<ResponseField name="crosshairMarkerBorderColor" type="string" default='""'>
+  Border color of the crosshair marker. Empty string falls back to the series color.
+</ResponseField>
+
+<ResponseField name="crosshairMarkerBackgroundColor" type="string" default='""'>
+  Fill color of the crosshair marker. Empty string falls back to the series color.
+</ResponseField>
+
+<ResponseField name="crosshairMarkerBorderWidth" type="number" default="2">
+  Border width of the crosshair marker in pixels.
+</ResponseField>
+
+<ResponseField name="lastPriceAnimation" type="LastPriceAnimationMode" default="Disabled">
+  Animate the last price dot: `0` Disabled, `1` Continuous, `2` OnDataUpdate (plays after each `update()` call).
+</ResponseField>
+
+```typescript
+chart.addSeries(LineSeries, {
+  color: '#2962ff',
+  lineWidth: 2,
+  lineType: 1,         // WithSteps
+  pointMarkersVisible: true,
+  pointMarkersRadius: 4,
+  lastPriceAnimation: 2, // OnDataUpdate
+});
+```
+
+---
+
+## AreaStyleOptions
+
+Used by the **Area** series. Inherits all crosshair and line options from `LineStyleOptions`, plus adds fill colors.
+
+<ResponseField name="topColor" type="string" default='"rgba(46, 220, 135, 0.4)"'>
+  The color at the top of the gradient fill.
+</ResponseField>
+
+<ResponseField name="bottomColor" type="string" default='"rgba(40, 221, 100, 0)"'>
+  The color at the bottom of the gradient fill, typically transparent.
+</ResponseField>
+
+<ResponseField name="lineColor" type="string" default='"#33D778"'>
+  The color of the area's upper line.
+</ResponseField>
+
+<ResponseField name="invertFilledArea" type="boolean" default="false">
+  When `true`, fills the area above the line instead of below.
+</ResponseField>
+
+<ResponseField name="relativeGradient" type="boolean" default="false">
+  When `true`, the gradient is calculated relative to the base value and the currently visible price range. When `false`, it spans the full pane height.
+</ResponseField>
+
+<ResponseField name="lineWidth" type="LineWidth" default="3">
+  Width of the upper line in pixels.
+</ResponseField>
+
+<ResponseField name="lineStyle" type="LineStyle" default="LineStyle.Solid">
+  Dash style of the upper line.
+</ResponseField>
+
+<ResponseField name="lineType" type="LineType" default="LineType.Simple">
+  Interpolation style of the upper line.
+</ResponseField>
+
+```typescript
+chart.addSeries(AreaSeries, {
+  topColor: 'rgba(41, 98, 255, 0.3)',
+  bottomColor: 'rgba(41, 98, 255, 0)',
+  lineColor: '#2962ff',
+  lineWidth: 2,
+});
+```
+
+---
+
+## BarStyleOptions
+
+Used by the **Bar** series.
+
+<ResponseField name="upColor" type="string" default='"#26a69a"'>
+  Color for bars where close ≥ open (rising bars).
+</ResponseField>
+
+<ResponseField name="downColor" type="string" default='"#ef5350"'>
+  Color for bars where close < open (falling bars).
+</ResponseField>
+
+<ResponseField name="openVisible" type="boolean" default="true">
+  Whether to draw the small horizontal tick indicating the open price.
+</ResponseField>
+
+<ResponseField name="thinBars" type="boolean" default="true">
+  When `true`, bars are drawn as thin sticks without a body. When `false`, a filled body is drawn between open and close.
+</ResponseField>
+
+---
+
+## CandlestickStyleOptions
+
+Used by the **Candlestick** series.
+
+<ResponseField name="upColor" type="string" default='"#26a69a"'>
+  Body color of rising candles.
+</ResponseField>
+
+<ResponseField name="downColor" type="string" default='"#ef5350"'>
+  Body color of falling candles.
+</ResponseField>
+
+<ResponseField name="borderVisible" type="boolean" default="true">
+  Whether to draw a border around the candle body.
+</ResponseField>
+
+<ResponseField name="borderColor" type="string" default='"#378658"'>
+  Border color applied to both up and down candles (shorthand — sets both `borderUpColor` and `borderDownColor`).
+</ResponseField>
+
+<ResponseField name="borderUpColor" type="string" default='"#26a69a"'>
+  Border color of rising candles.
+</ResponseField>
+
+<ResponseField name="borderDownColor" type="string" default='"#ef5350"'>
+  Border color of falling candles.
+</ResponseField>
+
+<ResponseField name="wickVisible" type="boolean" default="true">
+  Whether to draw the high/low wicks.
+</ResponseField>
+
+<ResponseField name="wickColor" type="string" default='"#737375"'>
+  Wick color applied to both up and down candles (shorthand — sets both `wickUpColor` and `wickDownColor`).
+</ResponseField>
+
+<ResponseField name="wickUpColor" type="string" default='"#26a69a"'>
+  Wick color for rising candles.
+</ResponseField>
+
+<ResponseField name="wickDownColor" type="string" default='"#ef5350"'>
+  Wick color for falling candles.
+</ResponseField>
+
+```typescript
+chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+```
+
+---
+
+## BaselineStyleOptions
+
+Used by the **Baseline** series, which renders values above and below a configurable reference price with different colors.
+
+<ResponseField name="baseValue" type="BaseValueType" default='{ type: "price", price: 0 }'>
+  The reference level that splits the series into "top" (above) and "bottom" (below) sections.
+  <Expandable title="BaseValuePrice">
+    <ResponseField name="type" type='"price"' required>
+      Currently only `'price'` is supported.
+    </ResponseField>
+    <ResponseField name="price" type="number" required>
+      The price level acting as the baseline.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="topFillColor1" type="string" default='"rgba(38, 166, 154, 0.28)"'>
+  First gradient color for the top (above-baseline) fill area.
+</ResponseField>
+
+<ResponseField name="topFillColor2" type="string" default='"rgba(38, 166, 154, 0.05)"'>
+  Second gradient color for the top fill area (toward the baseline).
+</ResponseField>
+
+<ResponseField name="topLineColor" type="string" default='"rgba(38, 166, 154, 1)"'>
+  Line color above the baseline.
+</ResponseField>
+
+<ResponseField name="bottomFillColor1" type="string" default='"rgba(239, 83, 80, 0.05)"'>
+  First gradient color for the bottom (below-baseline) fill area (toward the baseline).
+</ResponseField>
+
+<ResponseField name="bottomFillColor2" type="string" default='"rgba(239, 83, 80, 0.28)"'>
+  Second gradient color for the bottom fill area.
+</ResponseField>
+
+<ResponseField name="bottomLineColor" type="string" default='"rgba(239, 83, 80, 1)"'>
+  Line color below the baseline.
+</ResponseField>
+
+<ResponseField name="lineWidth" type="LineWidth" default="3">
+  Line thickness in pixels.
+</ResponseField>
+
+<ResponseField name="relativeGradient" type="boolean" default="false">
+  When `true`, fill gradients are relative to the visible range and baseline. When `false`, they span the full pane height.
+</ResponseField>
+
+```typescript
+chart.addSeries(BaselineSeries, {
+  baseValue: { type: 'price', price: 100 },
+  topLineColor: 'rgba(38, 166, 154, 1)',
+  topFillColor1: 'rgba(38, 166, 154, 0.28)',
+  topFillColor2: 'rgba(38, 166, 154, 0.05)',
+  bottomLineColor: 'rgba(239, 83, 80, 1)',
+  bottomFillColor1: 'rgba(239, 83, 80, 0.05)',
+  bottomFillColor2: 'rgba(239, 83, 80, 0.28)',
+});
+```
+
+---
+
+## HistogramStyleOptions
+
+Used by the **Histogram** series, which renders vertical bars from a base level.
+
+<ResponseField name="color" type="string" default='"#26a69a"'>
+  Default column color. Individual bars can override this with the `color` field on their data item.
+</ResponseField>
+
+<ResponseField name="base" type="number" default="0">
+  The price level from which columns extend. Columns extend upward when the bar value is above the base, and downward when below.
+</ResponseField>
+
+```typescript
+chart.addSeries(HistogramSeries, {
+  color: '#26a69a',
+  base: 0,
+  priceFormat: { type: 'volume' },
+});
+```

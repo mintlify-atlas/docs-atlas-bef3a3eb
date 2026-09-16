@@ -1,72 +1,120 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "Lightweight Charts",
+  "theme": "luma",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#040404",
+    "light": "#848c8c",
+    "dark": "#151524"
   },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
+  "favicon": "https://media.brand.dev/b88bbcf1-19b0-4439-9188-2c608c44883e.png",
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "https://media.brand.dev/3590d345-3f17-45c1-a3d8-20842f129cec.svg",
+    "dark": "https://media.brand.dev/3590d345-3f17-45c1-a3d8-20842f129cec.svg"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/tradingview/lightweight-charts"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/tradingview/lightweight-charts"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/series-types",
+              "concepts/chart-types",
+              "concepts/price-scale",
+              "concepts/time-scale",
+              "concepts/panes",
+              "concepts/time-zones"
+            ]
+          },
+          {
+            "group": "Plugin Development",
+            "pages": [
+              "plugins/overview",
+              "plugins/series-primitives",
+              "plugins/pane-primitives",
+              "plugins/custom-series",
+              "plugins/canvas-rendering"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/react",
+              "guides/vue",
+              "guides/tooltips",
+              "guides/watermarks",
+              "guides/series-markers",
+              "guides/price-and-volume"
+            ]
+          },
+          {
+            "group": "Migrations",
+            "pages": [
+              "migrations/from-v4-to-v5",
+              "migrations/from-v3-to-v4",
+              "migrations/from-v2-to-v3"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Chart API",
+            "pages": [
+              "api/create-chart",
+              "api/ichart-api",
+              "api/chart-options"
+            ]
+          },
+          {
+            "group": "Series API",
+            "pages": [
+              "api/iseries-api",
+              "api/series-options",
+              "api/data-types"
+            ]
+          },
+          {
+            "group": "Scale APIs",
+            "pages": [
+              "api/itime-scale-api",
+              "api/iprice-scale-api"
+            ]
+          },
+          {
+            "group": "Plugin Interfaces",
+            "pages": [
+              "api/icustom-series",
+              "api/iseries-primitive-api",
+              "api/ipane-primitive-api",
+              "api/ipane-api"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,281 @@
+---
+title: "Lightweight Charts v3 to v4 Migration Guide"
+sidebarTitle: "v3 → v4"
+description: "Upgrade Lightweight Charts from v3 to v4: removed options, renamed fields, updated price scale and mouse event APIs with full before/after examples."
+---
+
+Lightweight Charts v4 removes several deprecated options that were carried over from v2 and v3, cleans up the price scale API, and improves how time values and mouse event data are surfaced. Most changes are straightforward renames or small API adjustments. This guide covers every breaking change with direct before/after comparisons.
+
+<Warning>
+  Version 4 **removes** options that were deprecated in v3. Any code still using the old patterns will break silently (JavaScript) or fail to compile (TypeScript). Work through each section below before upgrading.
+</Warning>
+
+## Removed: `LasPriceAnimationMode` Enum Typo
+
+The incorrectly-spelled export `LasPriceAnimationMode` has been removed. Use the correctly-spelled `LastPriceAnimationMode` instead.
+
+<Tabs>
+  <Tab title="Before">
+    ```typescript
+    import { LasPriceAnimationMode } from 'lightweight-charts';
+    ```
+  </Tab>
+  <Tab title="After">
+    ```typescript
+    import { LastPriceAnimationMode } from 'lightweight-charts';
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Removed: `scaleMargins` from Series Options
+
+Previously `scaleMargins` could be passed directly in series creation options as a shorthand. In v4, it is ignored entirely — TypeScript users will see a compilation error. Apply scale margins to the series' price scale directly instead.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const series = chart.addLineSeries({
+        scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+        },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const series = chart.addLineSeries();
+
+    series.priceScale().applyOptions({
+        scaleMargins: {
+            top: 0.1,
+            bottom: 0.1,
+        },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Removed: `backgroundColor` from Layout Options
+
+The `layout.backgroundColor` shorthand has been removed in favour of the more flexible `layout.background` property, which supports both solid colours and gradients via `ColorType`.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const chart = createChart(container, {
+        layout: {
+            backgroundColor: 'red',
+        },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    import { createChart, ColorType } from 'lightweight-charts';
+
+    const chart = createChart(container, {
+        layout: {
+            background: {
+                type: ColorType.Solid,
+                color: 'red',
+            },
+        },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Removed: `overlay` Series Option
+
+The `overlay: true` series option was deprecated in v3 when dual price scales were introduced. It has been fully removed in v4. Use `priceScaleId: ''` to create an overlay series.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const histogramSeries = chart.addHistogramSeries({
+        overlay: true,
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const histogramSeries = chart.addHistogramSeries({
+        priceScaleId: '',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Any string that does not match `'left'` or `'right'` can be used as a custom price scale ID for overlay series. An empty string `''` is the conventional choice.
+</Note>
+
+---
+
+## Removed: Top-Level `priceScale` Chart Option
+
+The single `priceScale` option on the chart was deprecated in v3 when dual price scales were added. It is fully removed in v4. Migrate to `leftPriceScale` and `rightPriceScale`. See the [v2 → v3 guide](/migrations/from-v2-to-v3) for the full dual price scale migration.
+
+---
+
+## Updated: `chart.priceScale()` Requires an ID
+
+`chart.priceScale()` previously returned the right price scale when visible, or the left scale as a fallback, without requiring any argument. In v4 you must explicitly pass the price scale ID.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    // Returned the right or left price scale heuristically
+    const priceScale = chart.priceScale();
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    // Explicitly request the scale you want
+    const rightPriceScale = chart.priceScale('right');
+    const leftPriceScale  = chart.priceScale('left');
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Renamed: `drawTicks` → `ticksVisible`
+
+The `drawTicks` option on `leftPriceScale` and `rightPriceScale` has been renamed to `ticksVisible`. Note that the default value is now `false`.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    const chart = createChart(container, {
+        leftPriceScale:  { drawTicks: false },
+        rightPriceScale: { drawTicks: false },
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    const chart = createChart(container, {
+        leftPriceScale:  { ticksVisible: false },
+        rightPriceScale: { ticksVisible: false },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Updated: Outbound Time Value Type
+
+The type of time values the library **returns** to your code (outbound) has been unified with the type you **provide** to the library (inbound). Previously, outbound times could never be a business day string — now they mirror exactly what you passed in.
+
+This affects all of the following APIs:
+
+- `IChartApi.subscribeClick` (via `MouseEventParams.time`)
+- `IChartApi.subscribeCrosshairMove` (via `MouseEventParams.time`)
+- `LocalizationOptions.timeFormatter`
+- `TimeScaleOptions.tickMarkFormatter`
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    // Outbound time was always a UTCTimestamp or BusinessDay object — never a string
+    chart.subscribeClick(param => {
+        // param.time could be a number (UTCTimestamp) or BusinessDay object
+        console.log(param.time);
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    // Outbound time mirrors what you passed in (string, number, or BusinessDay)
+    series.setData([{ time: '2001-01-01', value: 1 }]);
+
+    chart.subscribeClick(param => {
+        // param.time is now '2001-01-01' — exactly the string you provided
+        console.log(param.time);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+Use the provided type-guard helpers to handle all possible time formats safely:
+
+```javascript
+import { createChart, isUTCTimestamp, isBusinessDay } from 'lightweight-charts';
+
+chart.subscribeClick(param => {
+    if (param.time === undefined) return;
+
+    if (isUTCTimestamp(param.time)) {
+        // param.time is a UTCTimestamp (number)
+    } else if (isBusinessDay(param.time)) {
+        // param.time is a BusinessDay object { year, month, day }
+    } else {
+        // param.time is an ISO date string, e.g. '2001-01-01'
+    }
+});
+```
+
+---
+
+## Removed: `MouseEventParams.seriesPrices`
+
+The `seriesPrices` property on `MouseEventParams` has been removed. Use `seriesData` instead — it provides the full data item for each series at that point, not just the price.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    chart.subscribeCrosshairMove(param => {
+        // seriesPrices was a Map<ISeriesApi, number>
+        const price = param.seriesPrices.get(lineSeries);
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    lineSeries.setData([{ time: '2001-01-01', value: 1 }]);
+    barSeries.setData([{ time: '2001-01-01', open: 5, high: 10, low: 1, close: 7 }]);
+
+    chart.subscribeCrosshairMove(param => {
+        // seriesData is a Map<ISeriesApi, SeriesDataItemTypeMap[SeriesType]>
+        console.log(param.seriesData.get(lineSeries)); // { time: '2001-01-01', value: 1 }
+        console.log(param.seriesData.get(barSeries));  // { time: '2001-01-01', open: 5, high: 10, low: 1, close: 7 }
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Renamed: `hoveredMarkerId` → `hoveredObjectId`
+
+The `MouseEventParams.hoveredMarkerId` field has been renamed to `hoveredObjectId` to reflect that it can refer to any interactive chart object, not just markers.
+
+<Tabs>
+  <Tab title="Before">
+    ```javascript
+    chart.subscribeCrosshairMove(param => {
+        console.log(param.hoveredMarkerId);
+    });
+    ```
+  </Tab>
+  <Tab title="After">
+    ```javascript
+    chart.subscribeCrosshairMove(param => {
+        console.log(param.hoveredObjectId);
+    });
+
+    chart.subscribeClick(param => {
+        console.log(param.hoveredObjectId);
+    });
+    ```
+  </Tab>
+</Tabs>

@@ -1,0 +1,278 @@
+---
+title: "IPanePrimitive: Pane-Level Plugin Interface Reference"
+sidebarTitle: "IPanePrimitive"
+description: "Implement IPanePrimitive to draw custom canvas graphics across an entire chart pane — backgrounds, annotations, and overlays not tied to a specific series."
+---
+
+`IPanePrimitive<HorzScaleItem>` is the interface you implement when building pane-level plugins — custom drawings that span the entire pane rather than being tied to a single series. Pane primitives are attached with `pane.attachPrimitive(primitive)` and detached with `pane.detachPrimitive(primitive)`. They share the same canvas-based rendering model as series primitives but operate at the pane scope, making them ideal for background shading, multi-series annotations, watermarks, and chart-wide decorations.
+
+<Tip>
+For graphics that should track a specific series' data (e.g. a target price line on a particular series), prefer `ISeriesPrimitive` via `series.attachPrimitive()`. Use `IPanePrimitive` when your drawing is independent of any single series.
+</Tip>
+
+---
+
+## Interface Overview
+
+`IPanePrimitive<HorzScaleItem>` is a type alias for `IPanePrimitiveBase<PaneAttachedParameter<HorzScaleItem>>`. All methods are optional except those you choose to implement based on your rendering needs.
+
+---
+
+## Lifecycle Hooks
+
+### attached (optional)
+
+Called once immediately after the primitive is attached to the pane via `pane.attachPrimitive()`. Use this to store chart references and set up any subscriptions or timers.
+
+<ParamField body="param" type="PaneAttachedParameter<HorzScaleItem>" required>
+  <Expandable title="PaneAttachedParameter fields">
+    <ResponseField name="chart" type="IChartApiBase<HorzScaleItem>">
+      Reference to the parent chart instance. Useful for reading time scale state or subscribing to chart-level events.
+    </ResponseField>
+    <ResponseField name="requestUpdate" type="() => void">
+      Call this function to schedule a chart redraw from within the primitive. Use it when external state changes (e.g. a timer, WebSocket message, or user interaction) require a repaint.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```typescript
+class MyPanePrimitive {
+  private _chart: IChartApiBase | null = null;
+  private _requestUpdate: (() => void) | null = null;
+
+  attached({ chart, requestUpdate }) {
+    this._chart = chart;
+    this._requestUpdate = requestUpdate;
+  }
+
+  detached() {
+    this._chart = null;
+    this._requestUpdate = null;
+  }
+}
+```
+
+---
+
+### detached (optional)
+
+Called when the primitive is removed from the pane. Release all references, cancel timers, and remove any external event subscriptions here.
+
+---
+
+## View Providers
+
+### updateAllViews (optional)
+
+Called before each render cycle. Recompute any state that depends on chart dimensions or data here — such as pixel coordinates derived from the current time scale state.
+
+```typescript
+updateAllViews() {
+  // Recompute highlight region coordinates
+  const ts = this._chart?.timeScale();
+  this._leftX = ts?.timeToCoordinate(this._startTime) ?? null;
+  this._rightX = ts?.timeToCoordinate(this._endTime) ?? null;
+}
+```
+
+---
+
+### paneViews (optional)
+
+Returns an array of `IPanePrimitivePaneView` objects that render in the main chart pane area.
+
+**Returns:** `readonly IPanePrimitivePaneView[]`
+
+<Note>
+Return the **same array reference** when nothing has changed. The library uses reference equality for cache invalidation — returning a new array every call will cause unnecessary redraws.
+</Note>
+
+Each `IPanePrimitivePaneView` must implement:
+
+<ResponseField name="renderer()" type="() => IPrimitivePaneRenderer | null">
+  Returns the renderer for this view, or `null` if there is nothing to draw.
+</ResponseField>
+
+<ResponseField name="zOrder?()" type="() => 'bottom' | 'normal' | 'top'">
+  Controls the render layer. `'bottom'` draws beneath all series (useful for backgrounds), `'normal'` draws at series level, `'top'` draws above everything including the crosshair. Defaults to `'normal'`.
+</ResponseField>
+
+---
+
+## IPanePrimitivePaneRenderer
+
+The canvas painter for pane views. Implements `IPrimitivePaneRenderer`.
+
+### draw
+
+<ParamField body="target" type="CanvasRenderingTarget2D" required>
+  The canvas rendering target provided by the fancy-canvas library.
+  - `target.useBitmapCoordinateSpace(cb)` — provides a context scaled to the physical pixel ratio; ideal for crisp lines and shapes.
+  - `target.useMediaCoordinateSpace(cb)` — provides a context in CSS pixels; simpler for most drawing.
+</ParamField>
+
+<ParamField body="utils" type="DrawingUtils">
+  Optional drawing utilities from the library. Exposes `setLineStyle(ctx, lineStyle)` for applying `LineStyle` dash patterns (Solid, Dotted, Dashed, etc.) to a canvas `CanvasRenderingContext2D`.
+</ParamField>
+
+### drawBackground (optional)
+
+Same signature as `draw`. Called during the background render pass, before any series are drawn. Use for watermarks, full-pane background fills, or anything that must appear entirely behind the chart data.
+
+---
+
+## hitTest (optional)
+
+Called on cursor movement to implement interactive primitives. Return a `PrimitiveHoveredItem` when the cursor is over a drawn element, or `null` otherwise. The `externalId` is surfaced in `crosshairMoved` and `click` events on the chart.
+
+<ParamField body="x" type="number" required>Cursor X coordinate in pixels.</ParamField>
+<ParamField body="y" type="number" required>Cursor Y coordinate in pixels.</ParamField>
+
+**Returns:** `PrimitiveHoveredItem | null`
+
+---
+
+## Code Examples
+
+<Tabs>
+  <Tab title="Background Gradient">
+    ```typescript
+    class GradientRenderer {
+      constructor(private _topColor: string, private _bottomColor: string) {}
+
+      draw(target) {
+        target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+          const gradient = ctx.createLinearGradient(0, 0, 0, mediaSize.height);
+          gradient.addColorStop(0, this._topColor);
+          gradient.addColorStop(1, this._bottomColor);
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, mediaSize.width, mediaSize.height);
+        });
+      }
+    }
+
+    class GradientView {
+      constructor(private _renderer: GradientRenderer) {}
+      renderer() { return this._renderer; }
+      zOrder() { return 'bottom' as const; }
+    }
+
+    class BackgroundGradientPrimitive {
+      private _view: GradientView;
+      private _views: GradientView[];
+
+      constructor(topColor: string, bottomColor: string) {
+        const renderer = new GradientRenderer(topColor, bottomColor);
+        this._view = new GradientView(renderer);
+        this._views = [this._view];
+      }
+
+      updateAllViews() {}
+      paneViews() { return this._views; }
+    }
+
+    // Attach to the main pane
+    const gradient = new BackgroundGradientPrimitive(
+      'rgba(41, 98, 255, 0.05)',
+      'rgba(41, 98, 255, 0)'
+    );
+    chart.panes()[0].attachPrimitive(gradient);
+    ```
+  </Tab>
+  <Tab title="Time Range Highlight">
+    ```typescript
+    class RangeHighlightRenderer {
+      private _leftX: number | null = null;
+      private _rightX: number | null = null;
+
+      setRange(leftX: number | null, rightX: number | null) {
+        this._leftX = leftX;
+        this._rightX = rightX;
+      }
+
+      draw(target) {
+        if (this._leftX === null || this._rightX === null) return;
+        const left = this._leftX;
+        const right = this._rightX;
+
+        target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+          ctx.fillStyle = 'rgba(255, 235, 59, 0.15)';
+          ctx.fillRect(left, 0, right - left, mediaSize.height);
+        });
+      }
+    }
+
+    class RangeHighlightView {
+      constructor(private _renderer: RangeHighlightRenderer) {}
+      renderer() { return this._renderer; }
+      zOrder() { return 'bottom' as const; }
+    }
+
+    class TimeRangeHighlight {
+      private _renderer = new RangeHighlightRenderer();
+      private _view: RangeHighlightView;
+      private _views: RangeHighlightView[];
+      private _chart: any = null;
+
+      constructor(
+        private _startTime: string,
+        private _endTime: string
+      ) {
+        this._view = new RangeHighlightView(this._renderer);
+        this._views = [this._view];
+      }
+
+      attached({ chart }) { this._chart = chart; }
+      detached() { this._chart = null; }
+
+      updateAllViews() {
+        const ts = this._chart?.timeScale();
+        const left = ts?.timeToCoordinate(this._startTime) ?? null;
+        const right = ts?.timeToCoordinate(this._endTime) ?? null;
+        this._renderer.setRange(left, right);
+      }
+
+      paneViews() { return this._views; }
+    }
+
+    const highlight = new TimeRangeHighlight('2024-01-10', '2024-01-15');
+    chart.panes()[0].attachPrimitive(highlight);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    class BackgroundGradientRenderer {
+      draw(target) {
+        target.useMediaCoordinateSpace(function({ context, mediaSize }) {
+          var gradient = context.createLinearGradient(0, 0, 0, mediaSize.height);
+          gradient.addColorStop(0, 'rgba(41, 98, 255, 0.05)');
+          gradient.addColorStop(1, 'rgba(41, 98, 255, 0)');
+          context.fillStyle = gradient;
+          context.fillRect(0, 0, mediaSize.width, mediaSize.height);
+        });
+      }
+    }
+
+    class BackgroundGradientView {
+      constructor() { this._renderer = new BackgroundGradientRenderer(); }
+      renderer() { return this._renderer; }
+      zOrder() { return 'bottom'; }
+    }
+
+    class BackgroundGradientPrimitive {
+      constructor() {
+        this._view = new BackgroundGradientView();
+        this._views = [this._view];
+      }
+      updateAllViews() {}
+      paneViews() { return this._views; }
+    }
+
+    var prim = new BackgroundGradientPrimitive();
+    chart.panes()[0].attachPrimitive(prim);
+
+    // Remove later:
+    chart.panes()[0].detachPrimitive(prim);
+    ```
+  </Tab>
+</Tabs>

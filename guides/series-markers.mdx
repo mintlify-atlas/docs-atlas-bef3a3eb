@@ -1,0 +1,270 @@
+---
+title: "Annotating Charts with Series Markers"
+sidebarTitle: "Series Markers"
+description: "Use createSeriesMarkers to add buy/sell arrows, circles, and custom text annotations to any series, with dynamic updates and event identification."
+---
+
+Series markers are visual annotations attached to data points on a series. They are useful for highlighting events such as trade entries and exits, earnings releases, dividend dates, or any other point of interest within your dataset. Markers appear directly on the chart at the specified time, automatically aligning their vertical position to the bar's high, low, or close value depending on the chosen `position`.
+
+## Creating markers
+
+Import `createSeriesMarkers` from `'lightweight-charts'` and pass it a series instance together with an array of marker definitions:
+
+```typescript
+import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), { height: 400 });
+const series = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+series.setData([
+  { time: '2024-01-01', open: 100, high: 105, low: 98, close: 103 },
+  { time: '2024-01-02', open: 103, high: 108, low: 101, close: 107 },
+  { time: '2024-01-03', open: 107, high: 110, low: 104, close: 106 },
+  { time: '2024-01-04', open: 106, high: 112, low: 103, close: 111 },
+  { time: '2024-01-05', open: 111, high: 115, low: 109, close: 110 },
+  { time: '2024-01-06', open: 110, high: 113, low: 107, close: 108 },
+]);
+
+const markers = createSeriesMarkers(series, [
+  {
+    time: '2024-01-03',
+    position: 'belowBar',
+    shape: 'arrowUp',
+    color: '#26a69a',
+    id: 'buy-1',
+    text: 'Buy',
+  },
+  {
+    time: '2024-01-06',
+    position: 'aboveBar',
+    shape: 'arrowDown',
+    color: '#ef5350',
+    id: 'sell-1',
+    text: 'Sell',
+  },
+]);
+```
+
+## SeriesMarker properties
+
+Each marker object supports the following fields:
+
+| Property | Type | Required | Description |
+|---|---|---|---|
+| `time` | `Time` | ✅ | The time value at which to draw the marker. Must match a data point in the series. |
+| `position` | `'aboveBar'` \| `'belowBar'` \| `'inBar'` | ✅ | Where to place the marker relative to the bar. |
+| `shape` | `'circle'` \| `'square'` \| `'arrowUp'` \| `'arrowDown'` | ✅ | The visual shape of the marker. |
+| `color` | `string` | ✅ | CSS color for the marker shape. |
+| `id` | `string` | — | Unique identifier used to detect which marker was clicked or hovered. |
+| `text` | `string` | — | Label displayed next to the marker. |
+| `size` | `number` | — | Scale factor for the marker size. Default is `1`. |
+
+### Position reference
+
+<Tabs>
+  <Tab title="aboveBar">
+    Places the marker above the bar's high. Use this for bearish signals (sell arrows pointing down).
+
+    ```typescript
+    {
+      time: '2024-01-06',
+      position: 'aboveBar',
+      shape: 'arrowDown',
+      color: '#ef5350',
+      text: 'Sell',
+    }
+    ```
+  </Tab>
+  <Tab title="belowBar">
+    Places the marker below the bar's low. Use this for bullish signals (buy arrows pointing up).
+
+    ```typescript
+    {
+      time: '2024-01-03',
+      position: 'belowBar',
+      shape: 'arrowUp',
+      color: '#26a69a',
+      text: 'Buy',
+    }
+    ```
+  </Tab>
+  <Tab title="inBar">
+    Centers the marker on the bar. Useful for neutral annotations like circles indicating an event.
+
+    ```typescript
+    {
+      time: '2024-01-04',
+      position: 'inBar',
+      shape: 'circle',
+      color: '#f68410',
+      text: 'Earnings',
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Shape reference
+
+<CardGroup cols={2}>
+  <Card title="arrowUp" icon="arrow-up">
+    A pointing-up arrow. Typically used for buy signals with `position: 'belowBar'`.
+  </Card>
+  <Card title="arrowDown" icon="arrow-down">
+    A pointing-down arrow. Typically used for sell signals with `position: 'aboveBar'`.
+  </Card>
+  <Card title="circle" icon="circle">
+    A solid circle. Good for events, dividends, or news annotations.
+  </Card>
+  <Card title="square" icon="square">
+    A solid square. An alternative neutral annotation shape.
+  </Card>
+</CardGroup>
+
+## Updating markers dynamically
+
+The object returned by `createSeriesMarkers` exposes `setMarkers()` to replace the entire marker set at any time. This is efficient — use it for real-time strategy signals or when filtering visible markers:
+
+```typescript
+// Add a new marker to the existing set
+const currentMarkers = markers.markers(); // returns readonly array
+markers.setMarkers([
+  ...currentMarkers,
+  {
+    time: '2024-01-05',
+    position: 'belowBar',
+    shape: 'circle',
+    color: '#f68410',
+    id: 'event-1',
+    text: 'Dividend',
+  },
+]);
+```
+
+### Clearing all markers
+
+Pass an empty array to remove all markers without detaching the plugin:
+
+```typescript
+markers.setMarkers([]);
+```
+
+### Reading current markers
+
+```typescript
+const current = markers.markers(); // readonly SeriesMarker[]
+console.log(`${current.length} markers active`);
+```
+
+## Identifying clicked markers
+
+Use the `id` field on each marker and listen to the chart's `click` event to detect which marker was clicked. The `hoveredInfo` property on `MouseEventParams` carries the `objectId` of the hovered element:
+
+```typescript
+chart.subscribeClick((param) => {
+  if (!param.hoveredInfo) return;
+
+  if (param.hoveredInfo.objectKind === 'series-marker') {
+    const markerId = param.hoveredInfo.objectId;
+    console.log('Clicked marker:', markerId);
+  }
+});
+```
+
+<Note>
+  The `id` field you set on a `SeriesMarker` becomes the `objectId` reported in click and hover events. Always set a unique `id` if you need to identify which marker triggered an interaction.
+</Note>
+
+## Removing the markers plugin
+
+Call `detach()` on the returned wrapper to remove the plugin and all its markers from the series:
+
+```typescript
+markers.detach();
+```
+
+## Automatic up/down markers
+
+For strategies that need markers automatically assigned based on price direction (e.g., a green arrow when price rises vs the previous bar, red when it falls), use the `createUpDownMarkers` plugin:
+
+```typescript
+import { createUpDownMarkers } from 'lightweight-charts';
+
+const upDownMarkers = createUpDownMarkers(series, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+});
+```
+
+<Tip>
+  `createUpDownMarkers` is best suited for automatically annotating every bar. For selective annotations at specific strategic points, use `createSeriesMarkers` with a hand-crafted markers array.
+</Tip>
+
+## Complete example
+
+```typescript
+import {
+  createChart,
+  CandlestickSeries,
+  createSeriesMarkers,
+} from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('chart'), {
+  width: 800,
+  height: 400,
+});
+
+const series = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+series.setData([
+  { time: '2024-01-01', open: 100, high: 105, low: 98,  close: 103 },
+  { time: '2024-01-02', open: 103, high: 108, low: 101, close: 107 },
+  { time: '2024-01-03', open: 107, high: 110, low: 104, close: 106 },
+  { time: '2024-01-04', open: 106, high: 112, low: 103, close: 111 },
+  { time: '2024-01-05', open: 111, high: 115, low: 109, close: 110 },
+  { time: '2024-01-06', open: 110, high: 113, low: 107, close: 108 },
+]);
+
+const markers = createSeriesMarkers(series, [
+  { time: '2024-01-03', position: 'belowBar', shape: 'arrowUp',   color: '#26a69a', id: 'buy-1',  text: 'Buy'      },
+  { time: '2024-01-04', position: 'inBar',    shape: 'circle',    color: '#f68410', id: 'event-1', text: 'Earnings' },
+  { time: '2024-01-06', position: 'aboveBar', shape: 'arrowDown', color: '#ef5350', id: 'sell-1', text: 'Sell'     },
+]);
+
+chart.timeScale().fitContent();
+
+// Click listener
+chart.subscribeClick((param) => {
+  if (param.hoveredInfo?.objectKind === 'series-marker') {
+    console.log('Marker clicked:', param.hoveredInfo.objectId);
+  }
+});
+```
+
+## API reference
+
+<CardGroup cols={2}>
+  <Card title="createSeriesMarkers" icon="tag" href="https://tradingview.github.io/lightweight-charts/docs/api/functions/createSeriesMarkers">
+    Creates and attaches a series markers plugin to a series instance.
+  </Card>
+  <Card title="SeriesMarker type" icon="database" href="https://tradingview.github.io/lightweight-charts/docs/api/type-aliases/SeriesMarker">
+    The marker definition object with time, position, shape, color, and id.
+  </Card>
+  <Card title="SeriesMarkerPosition" icon="arrows-up-down" href="https://tradingview.github.io/lightweight-charts/docs/api/type-aliases/SeriesMarkerPosition">
+    Valid position values: aboveBar, belowBar, inBar.
+  </Card>
+  <Card title="SeriesMarkerShape" icon="shapes" href="https://tradingview.github.io/lightweight-charts/docs/api/type-aliases/SeriesMarkerShape">
+    Valid shape values: circle, square, arrowUp, arrowDown.
+  </Card>
+</CardGroup>

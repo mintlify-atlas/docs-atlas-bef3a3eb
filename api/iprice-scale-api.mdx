@@ -1,0 +1,209 @@
+---
+title: "IPriceScaleApi: Price Axis Control Reference"
+sidebarTitle: "IPriceScaleApi"
+description: "Reference for IPriceScaleApi — apply options, read dimensions, set visible price ranges, toggle auto-scale, and configure logarithmic or percentage scale modes."
+---
+
+`IPriceScaleApi` is the interface for controlling a chart's price scale (vertical axis). You can obtain it via `chart.priceScale(id)` for a named scale, or via `series.priceScale()` for the scale currently attached to a specific series. It exposes methods to apply display options, read pixel dimensions, programmatically set the visible price range, and toggle auto-scaling behavior.
+
+<Warning>
+When you call `series.priceScale()`, the returned `IPriceScaleApi` is bound to the specific price scale (identified by ID and pane) that the series is using at that moment. If you later move the series to another pane or change its `priceScaleId`, the old reference will not follow — call `series.priceScale()` again to get a fresh reference.
+</Warning>
+
+---
+
+## Methods
+
+### applyOptions
+
+Applies a partial `PriceScaleOptions` object. Only the specified keys are updated; all others keep their current values.
+
+<ParamField body="options" type="DeepPartial<PriceScaleOptions>" required>
+  Any subset of price scale options. See [PriceScaleOptions](#pricescaleoptions) below.
+</ParamField>
+
+```typescript
+// Switch to logarithmic scale
+chart.priceScale('right').applyOptions({
+  mode: 1, // PriceScaleMode.Logarithmic
+});
+
+// Add 10% margin at top and bottom
+chart.priceScale('right').applyOptions({
+  scaleMargins: { top: 0.1, bottom: 0.1 },
+});
+```
+
+---
+
+### options
+
+Returns the full set of currently applied options, including all defaults.
+
+**Returns:** `Readonly<PriceScaleOptions>`
+
+```typescript
+const opts = chart.priceScale('right').options();
+console.log('Scale mode:', opts.mode);
+console.log('Margins:', opts.scaleMargins);
+```
+
+---
+
+### width
+
+Returns the current rendered width of the price scale in pixels. Returns `0` if the scale is hidden.
+
+**Returns:** `number`
+
+```typescript
+const w = chart.priceScale('right').width();
+console.log(`Price axis width: ${w}px`);
+```
+
+---
+
+### setVisibleRange
+
+Programmatically sets the visible price range. Disables auto-scaling for this scale (equivalent to calling `setAutoScale(false)` first).
+
+<ParamField body="range" type="IRange<number>" required>
+  Object with `from` (lower bound) and `to` (upper bound) price values.
+</ParamField>
+
+```typescript
+chart.priceScale('right').setVisibleRange({ from: 90, to: 120 });
+```
+
+---
+
+### getVisibleRange
+
+Returns the current visible price range. Returns `null` if the range has not been explicitly set and auto-scale is active.
+
+**Returns:** `IRange<number> | null`
+
+```typescript
+const range = chart.priceScale('right').getVisibleRange();
+if (range) {
+  console.log(`Price range: ${range.from} – ${range.to}`);
+}
+```
+
+---
+
+### setAutoScale
+
+Enables or disables automatic vertical scaling for this price scale.
+
+<ParamField body="on" type="boolean" required>
+  `true` to re-enable auto-scaling; `false` to lock the current visible range.
+</ParamField>
+
+```typescript
+// Lock the current range
+chart.priceScale('right').setAutoScale(false);
+
+// Re-enable auto-scaling
+chart.priceScale('right').setAutoScale(true);
+```
+
+---
+
+## PriceScaleOptions
+
+Passed to `applyOptions` and returned by `options()`. All fields are optional in `applyOptions`.
+
+<ResponseField name="mode" type="PriceScaleMode" default="0 (Normal)">
+  The scaling mode of the price axis.
+
+  | Value | Name | Description |
+  |-------|------|-------------|
+  | `0` | `Normal` | Linear scale (default). |
+  | `1` | `Logarithmic` | Log scale — useful for assets with large price ranges. |
+  | `2` | `Percentage` | Displays values as percentage change from the first visible bar. |
+  | `3` | `IndexedTo100` | Normalises all values so the first visible bar equals 100. |
+</ResponseField>
+
+<ResponseField name="invertScale" type="boolean" default="false">
+  When `true`, the price scale is drawn upside-down — higher prices appear at the bottom.
+</ResponseField>
+
+<ResponseField name="alignLabels" type="boolean" default="true">
+  When `true`, price labels are automatically shifted to avoid overlapping with each other.
+</ResponseField>
+
+<ResponseField name="scaleMargins" type="{ top: number, bottom: number }" default='{ top: 0.2, bottom: 0.1 }'>
+  Fractional margins above and below the data within the pane. Values range from `0` to `1`. For example, `{ top: 0.1, bottom: 0.1 }` reserves 10% of pane height above and below the visible price range.
+</ResponseField>
+
+<ResponseField name="borderVisible" type="boolean" default="true">
+  Whether to draw the border line between the chart pane and the price axis.
+</ResponseField>
+
+<ResponseField name="borderColor" type="string" default='"#2B2B43"'>
+  Color of the price axis border.
+</ResponseField>
+
+<ResponseField name="visible" type="boolean" default="true">
+  Whether the price axis is visible. When `false`, the axis is hidden but still affects layout.
+</ResponseField>
+
+<ResponseField name="tickMarkFormatter" type="(price: number, mode: PriceScaleMode, firstValue: number) => string">
+  A custom function to format tick mark labels on the price axis. Receives the raw price, the current scale mode, and the first value of the visible range (used for percentage/indexed modes).
+</ResponseField>
+
+<ResponseField name="minimumWidth" type="number" default="0">
+  Minimum width of the price axis in pixels.
+</ResponseField>
+
+---
+
+## Code Examples
+
+<Tabs>
+  <Tab title="Scale Modes">
+    ```typescript
+    const ps = chart.priceScale('right');
+
+    // Logarithmic
+    ps.applyOptions({ mode: 1 });
+
+    // Percentage change
+    ps.applyOptions({ mode: 2 });
+
+    // Indexed to 100
+    ps.applyOptions({ mode: 3 });
+
+    // Back to normal linear
+    ps.applyOptions({ mode: 0 });
+    ```
+  </Tab>
+  <Tab title="Custom Tick Formatter">
+    ```typescript
+    chart.priceScale('right').applyOptions({
+      tickMarkFormatter: (price, mode, firstValue) => {
+        if (mode === 2) {
+          // Percentage mode: show one decimal
+          return ((price / firstValue - 1) * 100).toFixed(1) + '%';
+        }
+        return price.toFixed(2);
+      },
+    });
+    ```
+  </Tab>
+  <Tab title="Overlay Scale">
+    ```typescript
+    // Attach a volume series to its own overlay scale
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceScaleId: 'volume',
+      color: '#26a69a',
+    });
+
+    // Access and configure the overlay scale
+    chart.priceScale('volume').applyOptions({
+      scaleMargins: { top: 0.8, bottom: 0 },
+    });
+    ```
+  </Tab>
+</Tabs>

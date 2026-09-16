@@ -1,0 +1,566 @@
+---
+title: "IChartApi Interface: Chart Methods and Events"
+sidebarTitle: "IChartApi"
+description: "Complete reference for the IChartApi interface — managing series, scales, panes, event subscriptions, crosshair control, and screenshot capture."
+---
+
+`IChartApi` is the object returned by `createChart`. Every interaction with a
+chart after creation — adding series, reading scale state, listening to mouse
+events, taking screenshots — goes through this interface. The base interface
+`IChartApiBase<HorzScaleItem>` is generic over the horizontal scale item type;
+`IChartApi` is the concrete alias that fixes `HorzScaleItem` to `Time`.
+
+---
+
+## Series Management
+
+### `addSeries`
+
+Adds a built-in series type to the chart using a **series definition** object
+(e.g. `LineSeries`, `CandlestickSeries`, `BarSeries`, `AreaSeries`,
+`HistogramSeries`, `BaselineSeries`).
+
+```typescript
+addSeries<T extends SeriesType>(
+  definition: SeriesDefinition<T>,
+  options?: SeriesPartialOptionsMap[T],
+  paneIndex?: number
+): ISeriesApi<T, HorzScaleItem>
+```
+
+<ParamField path="definition" type="SeriesDefinition<T>" required>
+  The series descriptor imported from the library, such as `LineSeries` or
+  `CandlestickSeries`. The type parameter `T` is inferred automatically.
+</ParamField>
+
+<ParamField path="options" type="SeriesPartialOptionsMap[T]">
+  Initial options for the series. Type-safe: only options valid for the chosen
+  series type are accepted.
+</ParamField>
+
+<ParamField path="paneIndex" type="number" default="0">
+  Zero-based index of the pane to add the series to. Pass a value greater than
+  the current pane count to create a new pane automatically.
+</ParamField>
+
+**Returns** `ISeriesApi<T, HorzScaleItem>` for the newly created series.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createChart, LineSeries, CandlestickSeries } from 'lightweight-charts';
+
+    const chart = createChart(container);
+
+    // Line series on the main pane
+    const line = chart.addSeries(LineSeries, {
+      color: '#2962FF',
+      lineWidth: 2,
+    });
+
+    // Candlestick series on the main pane
+    const candles = chart.addSeries(CandlestickSeries, {
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+    });
+
+    // Volume histogram on a separate pane (index 1)
+    const volume = chart.addSeries(HistogramSeries, {
+      priceScaleId: '',
+    }, 1);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { createChart, LineSeries, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+
+    const chart = createChart(container);
+
+    const line = chart.addSeries(LineSeries, { color: '#2962FF', lineWidth: 2 });
+    const volume = chart.addSeries(HistogramSeries, { priceScaleId: '' }, 1);
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### `addCustomSeries`
+
+Adds a custom series backed by your own `ICustomSeriesPaneView` renderer.
+
+```typescript
+addCustomSeries<TData, TOptions>(
+  customPaneView: ICustomSeriesPaneView<HorzScaleItem, TData, TOptions>,
+  customOptions?: SeriesPartialOptions<TOptions>,
+  paneIndex?: number
+): ISeriesApi<'Custom', HorzScaleItem, TData | WhitespaceData<HorzScaleItem>, TOptions>
+```
+
+<ParamField path="customPaneView" type="ICustomSeriesPaneView" required>
+  Your custom renderer object that implements the
+  `ICustomSeriesPaneView` interface.
+</ParamField>
+
+<ParamField path="customOptions" type="SeriesPartialOptions<TOptions>">
+  Initial options for the custom series.
+</ParamField>
+
+<ParamField path="paneIndex" type="number" default="0">
+  Pane to place the series in.
+</ParamField>
+
+```typescript
+const series = chart.addCustomSeries(new MyHeikinAshiRenderer(), {
+  upColor: '#26a69a',
+});
+```
+
+---
+
+### `removeSeries`
+
+Permanently removes a series from the chart and frees its resources. The series
+object is unusable after this call.
+
+```typescript
+removeSeries(seriesApi: ISeriesApi<SeriesType, HorzScaleItem>): void
+```
+
+<ParamField path="seriesApi" type="ISeriesApi" required>
+  The series instance previously returned by `addSeries` or `addCustomSeries`.
+</ParamField>
+
+```typescript
+chart.removeSeries(line);
+```
+
+<Warning>
+  `removeSeries` is irreversible. Do not call any methods on a series after
+  removing it.
+</Warning>
+
+---
+
+## Scale Access
+
+### `timeScale`
+
+Returns the time (horizontal) scale API.
+
+```typescript
+timeScale(): ITimeScaleApi<HorzScaleItem>
+```
+
+**Returns** `ITimeScaleApi<HorzScaleItem>` — use it to get or set the visible
+range, scroll positions, and coordinate conversions.
+
+```typescript
+const ts = chart.timeScale();
+ts.fitContent();                          // auto-fit all data
+ts.scrollToPosition(5, /* animated */ true);
+const range = ts.getVisibleLogicalRange();
+```
+
+---
+
+### `priceScale`
+
+Returns the API for a named price (vertical) scale.
+
+```typescript
+priceScale(priceScaleId: string, paneIndex?: number): IPriceScaleApi
+```
+
+<ParamField path="priceScaleId" type="string" required>
+  `'right'` or `'left'` for the default scales, or any custom overlay scale ID.
+</ParamField>
+
+<ParamField path="paneIndex" type="number" default="0">
+  The pane whose scale you want.
+</ParamField>
+
+**Returns** `IPriceScaleApi`.
+
+```typescript
+chart.priceScale('right').applyOptions({
+  scaleMargins: { top: 0.1, bottom: 0.2 },
+  mode: PriceScaleMode.Logarithmic,
+});
+```
+
+---
+
+### `panes`
+
+Returns the array of all pane API objects in top-to-bottom order.
+
+```typescript
+panes(): IPaneApi<HorzScaleItem>[]
+```
+
+**Returns** `IPaneApi<HorzScaleItem>[]`.
+
+```typescript
+const allPanes = chart.panes();
+console.log(`Chart has ${allPanes.length} pane(s)`);
+```
+
+---
+
+### `addPane`
+
+Programmatically appends a new pane to the chart.
+
+```typescript
+addPane(preserveEmptyPane?: boolean): IPaneApi<HorzScaleItem>
+```
+
+<ParamField path="preserveEmptyPane" type="boolean" default="false">
+  When `true`, the pane will not be automatically removed if it becomes empty
+  after all its series are deleted.
+</ParamField>
+
+**Returns** `IPaneApi<HorzScaleItem>` for the new pane.
+
+---
+
+### `removePane`
+
+Removes a pane by index. The last remaining pane cannot be removed.
+
+```typescript
+removePane(index: number): void
+```
+
+---
+
+### `swapPanes`
+
+Swaps the vertical positions of two panes.
+
+```typescript
+swapPanes(first: number, second: number): void
+```
+
+```typescript
+chart.swapPanes(0, 1); // move the second pane above the first
+```
+
+---
+
+### `paneSize`
+
+Returns the pixel dimensions of the chart pane drawing surface (excludes the
+time and price scale widgets).
+
+```typescript
+paneSize(paneIndex?: number): PaneSize
+// { width: number; height: number }
+```
+
+<ParamField path="paneIndex" type="number" default="0">
+  Index of the target pane.
+</ParamField>
+
+---
+
+## Options
+
+### `applyOptions`
+
+Merges a partial options object into the current chart configuration. Only the
+keys you provide are changed; everything else stays as it was.
+
+```typescript
+applyOptions(options: DeepPartial<ChartOptions>): void
+```
+
+<ParamField path="options" type="DeepPartial<ChartOptions>" required>
+  Any subset of [`ChartOptions`](/api/chart-options).
+</ParamField>
+
+```typescript
+// Switch to a dark theme at runtime
+chart.applyOptions({
+  layout: {
+    background: { type: ColorType.Solid, color: '#131722' },
+    textColor: '#d1d4dc',
+  },
+  grid: {
+    vertLines: { color: '#2B2B43' },
+    horzLines: { color: '#2B2B43' },
+  },
+});
+```
+
+---
+
+### `options`
+
+Returns a read-only snapshot of all currently applied options, including
+defaults for any fields the caller has not explicitly set.
+
+```typescript
+options(): Readonly<ChartOptions>
+```
+
+```typescript
+const currentWidth = chart.options().width;
+```
+
+---
+
+## Resize and Layout
+
+### `resize`
+
+Sets a fixed pixel size for the chart. If `autoSize` is active and a
+`ResizeObserver` is available, the provided values are ignored until
+`autoSize` is disabled.
+
+```typescript
+resize(width: number, height: number, forceRepaint?: boolean): void
+```
+
+<ParamField path="width" type="number" required>
+  New width in pixels.
+</ParamField>
+
+<ParamField path="height" type="number" required>
+  New height in pixels.
+</ParamField>
+
+<ParamField path="forceRepaint" type="boolean" default="false">
+  When `true` the chart repaints synchronously. Useful when you need a
+  screenshot immediately after resizing.
+</ParamField>
+
+---
+
+### `autoSizeActive`
+
+Returns `true` if `autoSize` is enabled **and** a `ResizeObserver` is
+successfully watching the container.
+
+```typescript
+autoSizeActive(): boolean
+```
+
+---
+
+### `chartElement`
+
+Returns the `<div>` element generated by the library that wraps the canvas
+layers. Use it to attach custom event listeners or measure chart position.
+
+```typescript
+chartElement(): HTMLDivElement
+```
+
+---
+
+## Event Subscriptions
+
+All subscription methods accept a `MouseEventHandler<HorzScaleItem>` callback
+with the signature `(param: MouseEventParams<HorzScaleItem>) => void`.
+
+### `MouseEventParams` fields
+
+<ResponseField name="time" type="HorzScaleItem | undefined">
+  The time value at the event location. `undefined` when the cursor is outside
+  the data range.
+</ResponseField>
+
+<ResponseField name="logical" type="Logical | undefined">
+  Logical bar index at the event location.
+</ResponseField>
+
+<ResponseField name="point" type="Point | undefined">
+  Pixel coordinate `{ x, y }` of the event. `undefined` for leave events.
+</ResponseField>
+
+<ResponseField name="paneIndex" type="number | undefined">
+  The index of the pane where the event occurred.
+</ResponseField>
+
+<ResponseField name="seriesData" type="Map<ISeriesApi, BarData | LineData | HistogramData | CustomData>">
+  Map from each visible series to its data point at the event location.
+</ResponseField>
+
+<ResponseField name="hoveredInfo" type="HoveredInfo | undefined">
+  Rich information about which chart object is under the cursor, including
+  `type`, `sourceKind`, `objectKind`, `series`, and `objectId`.
+</ResponseField>
+
+<ResponseField name="sourceEvent" type="TouchMouseEventData | undefined">
+  The raw browser mouse or touch event data.
+</ResponseField>
+
+---
+
+### `subscribeClick` / `unsubscribeClick`
+
+Fires once per mouse click on the chart area.
+
+```typescript
+subscribeClick(handler: MouseEventHandler<HorzScaleItem>): void
+unsubscribeClick(handler: MouseEventHandler<HorzScaleItem>): void
+```
+
+```typescript
+function onChartClick(param) {
+  if (!param.point) return;
+  console.log(`Clicked at time=${param.time}, price data:`, param.seriesData);
+}
+
+chart.subscribeClick(onChartClick);
+// later:
+chart.unsubscribeClick(onChartClick);
+```
+
+---
+
+### `subscribeDblClick` / `unsubscribeDblClick`
+
+Fires on mouse double-click.
+
+```typescript
+subscribeDblClick(handler: MouseEventHandler<HorzScaleItem>): void
+unsubscribeDblClick(handler: MouseEventHandler<HorzScaleItem>): void
+```
+
+<Note>
+  The source method is named `subscribeDblClick` (abbreviated), not
+  `subscribeDoubleClick`.
+</Note>
+
+---
+
+### `subscribeCrosshairMove` / `unsubscribeCrosshairMove`
+
+Fires every time the crosshair moves, including when it enters or leaves the
+chart. This callback is also triggered by `setCrosshairPosition`.
+
+```typescript
+subscribeCrosshairMove(handler: MouseEventHandler<HorzScaleItem>): void
+unsubscribeCrosshairMove(handler: MouseEventHandler<HorzScaleItem>): void
+```
+
+```typescript
+chart.subscribeCrosshairMove((param) => {
+  if (!param.point) {
+    // crosshair left the chart
+    return;
+  }
+  const priceAtCursor = param.seriesData.get(lineSeries);
+  document.getElementById('price-display').textContent =
+    priceAtCursor ? String(priceAtCursor.value) : '';
+});
+```
+
+---
+
+## Crosshair Control
+
+### `setCrosshairPosition`
+
+Programmatically moves the crosshair to a specific price and time. Useful for
+synchronising crosshairs across multiple chart instances.
+
+```typescript
+setCrosshairPosition(
+  price: number,
+  horizontalPosition: HorzScaleItem,
+  seriesApi: ISeriesApi<SeriesType, HorzScaleItem>
+): void
+```
+
+<ParamField path="price" type="number" required>
+  Target price (vertical coordinate) for the crosshair.
+</ParamField>
+
+<ParamField path="horizontalPosition" type="HorzScaleItem" required>
+  Target time (or custom horizontal scale value) for the crosshair.
+</ParamField>
+
+<ParamField path="seriesApi" type="ISeriesApi" required>
+  The series used as the price-scale reference for coordinate conversion.
+</ParamField>
+
+```typescript
+// Sync two charts
+chart1.subscribeCrosshairMove((param) => {
+  if (param.time && param.seriesData.size > 0) {
+    const [[series, data]] = param.seriesData;
+    chart2.setCrosshairPosition(data.value, param.time, chart2Series);
+  }
+});
+```
+
+---
+
+### `clearCrosshairPosition`
+
+Hides the crosshair completely.
+
+```typescript
+clearCrosshairPosition(): void
+```
+
+---
+
+## Utilities
+
+### `takeScreenshot`
+
+Captures the current chart state as an `HTMLCanvasElement`. Use
+`canvas.toDataURL()` or `canvas.toBlob()` to serialise the image.
+
+```typescript
+takeScreenshot(
+  addTopLayer?: boolean,
+  includeCrosshair?: boolean
+): HTMLCanvasElement
+```
+
+<ParamField path="addTopLayer" type="boolean" default="false">
+  When `true`, the top rendering layer (primitives, markers) is included in
+  the screenshot.
+</ParamField>
+
+<ParamField path="includeCrosshair" type="boolean" default="false">
+  When `true` (and `addTopLayer` is also `true`), the crosshair is drawn into
+  the screenshot.
+</ParamField>
+
+**Returns** `HTMLCanvasElement`.
+
+```typescript
+const canvas = chart.takeScreenshot();
+const link = document.createElement('a');
+link.href = canvas.toDataURL('image/png');
+link.download = 'chart.png';
+link.click();
+```
+
+---
+
+### `remove`
+
+Destroys the chart and removes all DOM elements it created. This is
+irreversible — do not call any methods on the chart or its series after calling
+`remove`.
+
+```typescript
+remove(): void
+```
+
+```typescript
+// clean up when the component unmounts
+chart.remove();
+```
+
+<Warning>
+  Always call `chart.remove()` when your component or page unmounts to prevent
+  memory leaks. After calling `remove()`, the chart object must be discarded.
+</Warning>

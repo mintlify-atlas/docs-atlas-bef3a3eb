@@ -1,0 +1,272 @@
+---
+title: "Chart Factory Functions: createChart and Variants"
+sidebarTitle: "Create Chart"
+description: "Factory functions that instantiate Lightweight Charts instances — createChart for time-based axes, createYieldCurveChart, createOptionsChart, createChartEx, and version."
+---
+
+The chart factory functions are your entry point into Lightweight Charts. Each function returns a chart API object you use to add series, configure scales, and listen to events. For the vast majority of use cases — stock charts, crypto charts, any time-based data — `createChart` is the right choice. Specialized variants exist for yield curves, options pricing, and fully custom horizontal scales.
+
+## `createChart`
+
+Creates a standard time-based chart. The horizontal axis accepts `Time` values (Unix timestamps, `YYYY-MM-DD` strings, or `{ year, month, day }` objects).
+
+```typescript
+function createChart(
+  container: string | HTMLElement,
+  options?: DeepPartial<ChartOptions>
+): IChartApi
+```
+
+<ParamField path="container" type="string | HTMLElement" required>
+  The DOM element that will host the chart, or a CSS `id` string. When a string
+  is passed the library calls `document.getElementById(container)` and throws if
+  the element is not found.
+</ParamField>
+
+<ParamField path="options" type="DeepPartial<ChartOptions>">
+  Any subset of [`ChartOptions`](/api/chart-options). Unspecified fields fall
+  back to library defaults. The `layout`, `grid`, `crosshair`, `timeScale`, and
+  price-scale sub-objects can each be partially overridden.
+</ParamField>
+
+**Returns** `IChartApi` — the full chart interface.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createChart, ColorType } from 'lightweight-charts';
+
+    const chart = createChart(document.getElementById('container')!, {
+      width: 800,
+      height: 400,
+      layout: {
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#333333',
+      },
+      grid: {
+        vertLines: { color: '#e1e1e1' },
+        horzLines: { color: '#e1e1e1' },
+      },
+    });
+
+    const lineSeries = chart.addSeries(LineSeries);
+    lineSeries.setData([
+      { time: '2024-01-01', value: 100 },
+      { time: '2024-01-02', value: 105 },
+    ]);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { createChart, ColorType } from 'lightweight-charts';
+
+    const chart = createChart(document.getElementById('container'), {
+      width: 800,
+      height: 400,
+      layout: {
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#333333',
+      },
+      grid: {
+        vertLines: { color: '#e1e1e1' },
+        horzLines: { color: '#e1e1e1' },
+      },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  Pass `autoSize: true` instead of explicit `width`/`height` values to let the
+  chart automatically fill its container using a `ResizeObserver`. This is the
+  recommended approach for responsive layouts.
+</Tip>
+
+---
+
+## `createYieldCurveChart`
+
+Creates a chart optimised for yield curve data. The horizontal scale is linearly
+spaced and expressed in **monthly duration units** (plain numbers) rather than
+calendar dates. Whitespace points are ignored when drawing grid lines and
+snapping the crosshair.
+
+```typescript
+function createYieldCurveChart(
+  container: string | HTMLElement,
+  options?: DeepPartial<YieldCurveChartOptions>
+): IYieldCurveChartApi
+```
+
+<ParamField path="container" type="string | HTMLElement" required>
+  DOM element or element `id` string — same semantics as `createChart`.
+</ParamField>
+
+<ParamField path="options" type="DeepPartial<YieldCurveChartOptions>">
+  All standard `ChartOptions` plus a `yieldCurve` sub-object.
+
+  <Expandable title="yieldCurve options">
+    <ParamField path="yieldCurve.baseResolution" type="number" default="1">
+      The smallest time unit, typically representing one month. Determines the
+      granularity of the horizontal scale.
+    </ParamField>
+    <ParamField path="yieldCurve.minimumTimeRange" type="number" default="120">
+      Minimum time range shown on the chart in units of `baseResolution`.
+      Defaults to 120 (ten years when `baseResolution` is one month).
+    </ParamField>
+    <ParamField path="yieldCurve.startTimeRange" type="number" default="0">
+      Starting time value for the chart in units of `baseResolution`.
+    </ParamField>
+    <ParamField path="yieldCurve.formatTime" type="(months: number) => string">
+      Optional custom formatter for horizontal axis labels. Receives the number
+      of `baseResolution` units and must return a display string.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns** `IYieldCurveChartApi`.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createYieldCurveChart } from 'lightweight-charts';
+
+    const chart = createYieldCurveChart(document.getElementById('container')!, {
+      yieldCurve: {
+        baseResolution: 1,       // 1 month per unit
+        minimumTimeRange: 120,   // show at least 10 years
+        startTimeRange: 0,
+        formatTime: (months) => `${months}M`,
+      },
+    });
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { createYieldCurveChart } from 'lightweight-charts';
+
+    const chart = createYieldCurveChart(document.getElementById('container'), {
+      yieldCurve: {
+        baseResolution: 1,
+        minimumTimeRange: 120,
+        startTimeRange: 0,
+      },
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## `createOptionsChart`
+
+Creates a chart where the **horizontal axis represents price values** (numbers)
+rather than time. This is useful for option chains, price distributions, or any
+dataset where strike price is the natural x-axis.
+
+```typescript
+function createOptionsChart(
+  container: string | HTMLElement,
+  options?: DeepPartial<PriceChartOptions>
+): IChartApiBase<number>
+```
+
+<ParamField path="container" type="string | HTMLElement" required>
+  DOM element or element `id` string.
+</ParamField>
+
+<ParamField path="options" type="DeepPartial<PriceChartOptions>">
+  Standard chart options adapted for a price-based horizontal scale.
+</ParamField>
+
+**Returns** `IChartApiBase<number>` — the chart interface typed with `number`
+horizontal scale items.
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { createOptionsChart } from 'lightweight-charts';
+
+    const chart = createOptionsChart(document.getElementById('container')!, {
+      width: 600,
+      height: 300,
+    });
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { createOptionsChart } from 'lightweight-charts';
+
+    const chart = createOptionsChart(document.getElementById('container'), {
+      width: 600,
+      height: 300,
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## `createChartEx`
+
+The low-level generic factory that all other `create*` functions ultimately call.
+Use it when you need to implement a fully custom horizontal scale type.
+
+```typescript
+function createChartEx<HorzScaleItem, THorzScaleBehavior extends IHorzScaleBehavior<HorzScaleItem>>(
+  container: string | HTMLElement,
+  horzScaleBehavior: THorzScaleBehavior,
+  options?: DeepPartial<ReturnType<THorzScaleBehavior['options']>>
+): IChartApiBase<HorzScaleItem>
+```
+
+<ParamField path="container" type="string | HTMLElement" required>
+  DOM element or element `id` string.
+</ParamField>
+
+<ParamField path="horzScaleBehavior" type="THorzScaleBehavior" required>
+  An object implementing `IHorzScaleBehavior<HorzScaleItem>`. This strategy
+  object encapsulates all type-specific behaviours of the horizontal scale such
+  as key extraction, tick-mark generation, and option defaults.
+</ParamField>
+
+<ParamField path="options" type="DeepPartial<...>">
+  Options inferred from the behavior object's `options()` return type.
+</ParamField>
+
+**Returns** `IChartApiBase<HorzScaleItem>`.
+
+<Note>
+  To build on top of the default time-based implementation rather than
+  starting from scratch, use `defaultHorzScaleBehavior()` which returns the
+  uninstantiated `HorzScaleBehaviorTime` class.
+</Note>
+
+```typescript
+import { createChartEx, defaultHorzScaleBehavior } from 'lightweight-charts';
+
+const HorzBehavior = defaultHorzScaleBehavior();
+const chart = createChartEx(
+  document.getElementById('container')!,
+  new HorzBehavior(),
+  { width: 800, height: 400 }
+);
+```
+
+---
+
+## `version`
+
+Returns the version string of the installed library.
+
+```typescript
+function version(): string
+```
+
+**Returns** `string` — e.g. `'5.2.1'`.
+
+```typescript
+import { version } from 'lightweight-charts';
+
+console.log(`Using Lightweight Charts v${version()}`);
+```

@@ -1,0 +1,264 @@
+---
+title: "IPaneApi: Chart Pane Management Reference"
+sidebarTitle: "IPaneApi"
+description: "Reference for IPaneApi — get and set pane height, reorder panes, access pane series, manage stretch factors, and attach pane-level drawing primitives."
+---
+
+`IPaneApi<HorzScaleItem>` represents a single horizontal band in a multi-pane chart layout. Each pane can host one or more series, has its own price scale, and can be independently resized or reordered. You get access to panes via `chart.panes()` or from `series.getPane()`. Panes are zero-indexed from the top.
+
+<Note>
+Pane indices are zero-based and ordered top-to-bottom. The first pane (main chart) is always at index 0. New panes created by `series.moveToPane(N)` append to the end when `N` exceeds the current pane count.
+</Note>
+
+---
+
+## Methods
+
+### getHeight
+
+Returns the current rendered height of the pane in pixels.
+
+**Returns:** `number`
+
+```typescript
+const height = chart.panes()[0].getHeight();
+console.log(`Main pane height: ${height}px`);
+```
+
+---
+
+### setHeight
+
+Sets the height of the pane to a fixed pixel value.
+
+<ParamField body="height" type="number" required>
+  The desired height in pixels.
+</ParamField>
+
+```typescript
+chart.panes()[1].setHeight(150); // Fix second pane at 150px
+```
+
+---
+
+### getStretchFactor
+
+Returns the relative size weight of this pane compared to others. The default is `1`. A pane with stretch factor `2` will be twice as tall as a pane with stretch factor `1`.
+
+**Returns:** `number`
+
+---
+
+### setStretchFactor
+
+Sets the relative size weight. All pane heights are proportionally calculated from their stretch factors.
+
+<ParamField body="stretchFactor" type="number" required>
+  The relative weight for this pane. For example, if you have three panes with factors `0.2`, `0.3`, and `0.5`, they occupy 20%, 30%, and 50% of the total available chart height respectively.
+</ParamField>
+
+```typescript
+const panes = chart.panes();
+panes[0].setStretchFactor(0.6); // main chart: 60%
+panes[1].setStretchFactor(0.2); // RSI:        20%
+panes[2].setStretchFactor(0.2); // volume:     20%
+```
+
+---
+
+### paneIndex
+
+Returns the current zero-based index of this pane within the chart.
+
+**Returns:** `number`
+
+---
+
+### moveTo
+
+Moves (reorders) this pane to a target index. The pane currently at the target index and all panes between will shift accordingly.
+
+<ParamField body="paneIndex" type="number" required>
+  Target zero-based index. Must be between `0` and `totalPanes - 1`.
+</ParamField>
+
+```typescript
+// Swap the second pane to be the first
+chart.panes()[1].moveTo(0);
+```
+
+---
+
+### getSeries
+
+Returns an array of all series currently assigned to this pane.
+
+**Returns:** `ISeriesApi<SeriesType, HorzScaleItem>[]`
+
+```typescript
+const seriesInPane = chart.panes()[0].getSeries();
+console.log(`Series count in main pane: ${seriesInPane.length}`);
+```
+
+---
+
+### getHTMLElement
+
+Returns the underlying DOM element for this pane, or `null` if the pane has not been rendered yet.
+
+**Returns:** `HTMLElement | null`
+
+---
+
+### priceScale
+
+Returns the `IPriceScaleApi` for a named price scale within this pane.
+
+<ParamField body="priceScaleId" type="string" required>
+  The ID of the price scale, e.g. `'right'`, `'left'`, or a custom overlay scale ID.
+</ParamField>
+
+**Returns:** `IPriceScaleApi`
+
+```typescript
+const rightScale = chart.panes()[0].priceScale('right');
+rightScale.applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
+```
+
+---
+
+### setPreserveEmptyPane / preserveEmptyPane
+
+Controls whether the pane is kept alive even when all its series are removed.
+
+<ParamField body="preserve" type="boolean" required>
+  `true` to keep the empty pane visible; `false` to allow it to be automatically removed.
+</ParamField>
+
+```typescript
+chart.panes()[1].setPreserveEmptyPane(true);
+console.log(chart.panes()[1].preserveEmptyPane()); // true
+```
+
+---
+
+### addSeries
+
+Creates and adds a series to this specific pane.
+
+<ParamField body="definition" type="SeriesDefinition<T>" required>
+  The series type constructor, e.g. `LineSeries`, `CandlestickSeries`.
+</ParamField>
+
+<ParamField body="options" type="SeriesPartialOptionsMap[T]">
+  Optional partial options for the series.
+</ParamField>
+
+**Returns:** `ISeriesApi<T, HorzScaleItem>`
+
+```typescript
+import { LineSeries } from 'lightweight-charts';
+
+const indicatorPane = chart.panes()[1];
+const rsiLine = indicatorPane.addSeries(LineSeries, { color: '#ff9800' });
+```
+
+---
+
+### addCustomSeries
+
+Creates and adds a custom series to this specific pane.
+
+<ParamField body="customPaneView" type="ICustomSeriesPaneView<HorzScaleItem, TData, TOptions>" required>
+  Your custom series view implementation.
+</ParamField>
+
+<ParamField body="customOptions" type="SeriesPartialOptions<TOptions>">
+  Optional partial options to override defaults from `defaultOptions()`.
+</ParamField>
+
+**Returns:** `ISeriesApi<'Custom', HorzScaleItem, TData | WhitespaceData, TOptions, TPartialOptions>`
+
+---
+
+### attachPrimitive
+
+Attaches a pane-level drawing primitive. Pane primitives render on top of (or behind) all series in the pane and do not need to be associated with any specific series.
+
+<ParamField body="primitive" type="IPanePrimitive<HorzScaleItem>" required>
+  Any object implementing `IPanePrimitive`.
+</ParamField>
+
+---
+
+### detachPrimitive
+
+Detaches a previously attached pane primitive. Does nothing if the primitive is not attached.
+
+<ParamField body="primitive" type="IPanePrimitive<HorzScaleItem>" required>
+  The primitive instance to remove.
+</ParamField>
+
+---
+
+## Code Examples
+
+<Tabs>
+  <Tab title="Multi-Pane Setup">
+    ```typescript
+    import { createChart, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
+
+    const chart = createChart(container, { height: 600 });
+
+    // Pane 0: main OHLC chart (created automatically)
+    const candleSeries = chart.addSeries(CandlestickSeries);
+
+    // Pane 1: volume histogram
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+    });
+    volumeSeries.moveToPane(1);
+
+    // Pane 2: RSI indicator
+    const rsiSeries = chart.addSeries(LineSeries, { color: '#ff9800' });
+    rsiSeries.moveToPane(2);
+
+    // Resize panes proportionally
+    const panes = chart.panes();
+    panes[0].setStretchFactor(0.6);
+    panes[1].setStretchFactor(0.2);
+    panes[2].setStretchFactor(0.2);
+    ```
+  </Tab>
+  <Tab title="Pane Inspection">
+    ```typescript
+    const panes = chart.panes();
+    console.log('Number of panes:', panes.length);
+
+    panes.forEach((pane, idx) => {
+      const series = pane.getSeries();
+      console.log(`Pane ${idx}: ${series.length} series, height=${pane.getHeight()}px`);
+    });
+    ```
+  </Tab>
+  <Tab title="Pane Primitive (Watermark)">
+    ```typescript
+    import { createTextWatermark } from 'lightweight-charts';
+
+    // Attach a text watermark to the main pane
+    const watermark = createTextWatermark(chart.panes()[0], {
+      lines: [
+        {
+          text: 'DEMO',
+          fontSize: 48,
+          fontStyle: 'bold',
+          color: 'rgba(0, 0, 0, 0.15)',
+        },
+      ],
+    });
+
+    // Remove later:
+    chart.panes()[0].detachPrimitive(watermark);
+    ```
+  </Tab>
+</Tabs>

@@ -1,0 +1,219 @@
+---
+title: "Series Primitives: Overlay Plugins for Chart Series"
+sidebarTitle: "Series Primitives"
+description: "Build drawing tools, annotations, and custom axis labels that attach to a Lightweight Charts series and render on the pane, price scale, and time scale."
+---
+
+A series primitive is a plugin that attaches to a specific series and can draw anywhere that series appears: on the main chart pane, on the price scale pane, on the time scale pane, and as labels directly on the price or time axes. Drawing tools, alert lines, trend annotations, and custom axis labels are all natural fits for series primitives. If you need an element that is independent of any series, see [Pane primitives](/plugins/pane-primitives) instead.
+
+## Attaching and detaching
+
+A series primitive is any object that satisfies the `ISeriesPrimitive` interface. Create an instance of your primitive class and pass it to `attachPrimitive()` on the target series:
+
+```typescript
+class MyCustomPrimitive {
+  // implements ISeriesPrimitive
+}
+
+const chart = createChart(document.getElementById('container'));
+const lineSeries = chart.addSeries(LineSeries);
+
+lineSeries.setData([
+  { time: '2024-01-01', value: 100 },
+  // ...
+]);
+
+const primitive = new MyCustomPrimitive();
+lineSeries.attachPrimitive(primitive);
+```
+
+To remove the primitive later, call `detachPrimitive()` with the same instance:
+
+```typescript
+lineSeries.detachPrimitive(primitive);
+```
+
+<Note>
+  Attaching a primitive triggers its `attached` lifecycle method; detaching triggers `detached`. Use these hooks to register and clean up event listeners or external resources.
+</Note>
+
+## How a primitive works
+
+A primitive is built from three kinds of objects, each with one responsibility:
+
+- The **primitive** owns the state — what to draw and when to recompute.
+- Its **views** convert that state into coordinates — where to draw.
+- Each view's **renderer** puts pixels on the canvas — the actual drawing.
+
+When the chart redraws, it calls `updateAllViews()` on the primitive so views can refresh their cached coordinates, then collects the views and calls each renderer. This separation keeps redraws fast and avoids recreating objects on every frame.
+
+### Minimal skeleton
+
+```typescript
+class MySeriesPrimitive {
+  // Called before each redraw — update cached coordinates here
+  updateAllViews(): void {}
+
+  // Return one or more pane views for the main chart area
+  paneViews(): MyPrimitiveView[] {
+    return [new MyPrimitiveView()];
+  }
+}
+
+class MyPrimitiveView {
+  // Return the renderer that does the actual drawing
+  renderer(): MyPrimitiveRenderer {
+    return new MyPrimitiveRenderer();
+  }
+}
+
+class MyPrimitiveRenderer {
+  draw(target: CanvasRenderingTarget2D): void {
+    target.useBitmapCoordinateSpace(({ context, bitmapSize }) => {
+      // draw using the 2D Canvas API
+    });
+  }
+}
+
+// Attach to series
+const primitive = new MySeriesPrimitive();
+series.attachPrimitive(primitive);
+```
+
+## Views by chart area
+
+The library calls specific getter methods on your primitive to collect views for each part of the chart. Implement only the getters you need:
+
+| Getter | Draws on | View interface |
+|--------|----------|----------------|
+| `paneViews()` | Main chart pane | `IPrimitivePaneView` |
+| `priceAxisPaneViews()` | Price scale pane (full canvas) | `IPrimitivePaneView` |
+| `timeAxisPaneViews()` | Time scale pane (full canvas) | `IPrimitivePaneView` |
+| `priceAxisViews()` | Labels on the price axis | `ISeriesPrimitiveAxisView` |
+| `timeAxisViews()` | Labels on the time axis | `ISeriesPrimitiveAxisView` |
+
+<Tip>
+  Pane views draw with the full `CanvasRenderingContext2D` API via a `CanvasRenderingTarget2D` target. Axis views (`priceAxisViews` / `timeAxisViews`) define text labels by implementing coordinate, text, color, and visibility methods — they do not draw directly on a canvas.
+</Tip>
+
+### Controlling draw order with `zOrder`
+
+Each pane view can specify a `zOrder` property that controls where in the visual stack it appears relative to the series, grid, and crosshair. The available values are:
+
+<Accordion title="PrimitivePaneViewZOrder values">
+  - `'bottom'` — drawn below the grid and all series
+  - `'normal'` — drawn above the series but below the crosshair (default)
+  - `'top'` — drawn above everything, including the crosshair
+</Accordion>
+
+### Optional background drawing
+
+Pane renderers can also implement a `drawBackground()` method alongside `draw()`. The library calls `drawBackground()` at the same `zOrder` level but before `draw()`, allowing elements at the same layer to be composited correctly.
+
+## Lifecycle methods
+
+<Accordion title="attached(param)">
+  Called when the primitive is attached to a series. The argument contains:
+
+  - `chart` — the `IChartApiBase` instance
+  - `series` — the `ISeriesApi` instance this primitive is attached to
+  - `requestUpdate` — a callback to schedule a redraw when your primitive's state changes externally
+  - `horzScaleBehavior` — horizontal scale utilities
+
+  ```typescript
+  class MyPrimitive {
+    private requestUpdate!: () => void;
+
+    attached({ requestUpdate }: SeriesAttachedParameter): void {
+      this.requestUpdate = requestUpdate;
+    }
+  }
+  ```
+</Accordion>
+
+<Accordion title="detached()">
+  Called when the primitive is removed from the series. Clean up event listeners, timers, and any other resources created in `attached()` here.
+</Accordion>
+
+## Updating views
+
+The library calls `updateAllViews()` on your primitive each time it needs to redraw the chart. This is the right place to recompute and cache any coordinate values your views will read during their `renderer()` call. If you need to trigger a redraw from outside the normal chart cycle (for example, in response to an external data update), call the `requestUpdate` callback supplied by `attached()`.
+
+## Extending auto-scale
+
+Implement `autoscaleInfo(startTimePoint, endTimePoint)` to tell the chart's auto-scaling algorithm about additional vertical space your primitive needs. The return value is merged with the series' own autoscale info to compute the visible price range.
+
+<Warning>
+  `autoscaleInfo` is called on every scroll and zoom event, so keep the implementation simple or cache results aggressively to avoid frame-rate drops.
+</Warning>
+
+## Full example
+
+```typescript
+import { createChart, LineSeries } from 'lightweight-charts';
+
+class HighlightBandRenderer {
+  private _y1: number = 0;
+  private _y2: number = 0;
+
+  setCoords(y1: number, y2: number): void {
+    this._y1 = y1;
+    this._y2 = y2;
+  }
+
+  draw(target: CanvasRenderingTarget2D): void {
+    target.useBitmapCoordinateSpace(({ context, bitmapSize, verticalPixelRatio }) => {
+      context.fillStyle = 'rgba(255, 200, 0, 0.2)';
+      const top = Math.round(this._y1 * verticalPixelRatio);
+      const bottom = Math.round(this._y2 * verticalPixelRatio);
+      context.fillRect(0, top, bitmapSize.width, bottom - top);
+    });
+  }
+}
+
+class HighlightBandView {
+  private _renderer = new HighlightBandRenderer();
+
+  setCoords(y1: number, y2: number): void {
+    this._renderer.setCoords(y1, y2);
+  }
+
+  renderer(): HighlightBandRenderer {
+    return this._renderer;
+  }
+}
+
+class HighlightBandPrimitive {
+  private _view = new HighlightBandView();
+  private _priceLow: number;
+  private _priceHigh: number;
+  private _series: ISeriesApi<'Line'> | null = null;
+
+  constructor(priceLow: number, priceHigh: number) {
+    this._priceLow = priceLow;
+    this._priceHigh = priceHigh;
+  }
+
+  attached({ series, requestUpdate }: SeriesAttachedParameter): void {
+    this._series = series as ISeriesApi<'Line'>;
+  }
+
+  updateAllViews(): void {
+    if (!this._series) return;
+    const y1 = this._series.priceToCoordinate(this._priceHigh) ?? 0;
+    const y2 = this._series.priceToCoordinate(this._priceLow) ?? 0;
+    this._view.setCoords(y1, y2);
+  }
+
+  paneViews(): HighlightBandView[] {
+    return [this._view];
+  }
+}
+
+// Usage
+const chart = createChart(document.getElementById('container')!);
+const series = chart.addSeries(LineSeries);
+series.setData([{ time: '2024-01-01', value: 100 }, { time: '2024-01-02', value: 110 }]);
+
+series.attachPrimitive(new HighlightBandPrimitive(95, 115));
+```

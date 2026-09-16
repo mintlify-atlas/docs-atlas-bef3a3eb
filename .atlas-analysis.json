@@ -1,0 +1,148 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Lightweight Charts",
+  "projectDescription": "A performant, open-source financial charting library built with HTML5 canvas, offering interactive time series and financial charts for web applications.",
+  "theme": "luma",
+  "primaryColor": "#040404",
+  "lightColor": "#848c8c",
+  "darkColor": "#151524",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/series-types",
+              "concepts/chart-types",
+              "concepts/price-scale",
+              "concepts/time-scale",
+              "concepts/panes",
+              "concepts/time-zones"
+            ]
+          },
+          {
+            "group": "Plugin Development",
+            "pages": [
+              "plugins/overview",
+              "plugins/series-primitives",
+              "plugins/pane-primitives",
+              "plugins/custom-series",
+              "plugins/canvas-rendering"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/react",
+              "guides/vue",
+              "guides/tooltips",
+              "guides/watermarks",
+              "guides/series-markers",
+              "guides/price-and-volume"
+            ]
+          },
+          {
+            "group": "Migrations",
+            "pages": [
+              "migrations/from-v4-to-v5",
+              "migrations/from-v3-to-v4",
+              "migrations/from-v2-to-v3"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Chart API",
+            "pages": [
+              "api/create-chart",
+              "api/ichart-api",
+              "api/chart-options"
+            ]
+          },
+          {
+            "group": "Series API",
+            "pages": [
+              "api/iseries-api",
+              "api/series-options",
+              "api/data-types"
+            ]
+          },
+          {
+            "group": "Scale APIs",
+            "pages": [
+              "api/itime-scale-api",
+              "api/iprice-scale-api"
+            ]
+          },
+          {
+            "group": "Plugin Interfaces",
+            "pages": [
+              "api/icustom-series",
+              "api/iseries-primitive-api",
+              "api/ipane-primitive-api",
+              "api/ipane-api"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Lightweight (~40 KB minzipped) financial chart library built on HTML5 canvas",
+    "Six built-in series types: Line, Area, Bar, Candlestick, Baseline, Histogram",
+    "Three chart types: standard time-based, yield curve, and options (price-based)",
+    "Multi-pane layouts with resizable panes",
+    "Left, right, and overlay price scales with multiple modes",
+    "Interactive time scale with logical range, zooming, and scrolling",
+    "Plugin system supporting custom series, series primitives, and pane primitives",
+    "Built-in plugins: text/image watermarks, series markers, up/down markers",
+    "TypeScript-first with full type declarations",
+    "Framework-agnostic with guides for React, Vue, and Web Components",
+    "ES module and standalone (IIFE) build variants",
+    "AI coding assistant support via Agent Skill and llms.txt"
+  ],
+  "publicApiSurface": [
+    "createChart(container, options)",
+    "createYieldCurveChart(container, options)",
+    "createOptionsChart(container, options)",
+    "createChartEx(container, paneView, horzScaleBehavior, options)",
+    "IChartApi.addSeries(definition, options, paneIndex)",
+    "IChartApi.addCustomSeries(customPaneView, options, paneIndex)",
+    "IChartApi.removeSeries(seriesApi)",
+    "IChartApi.timeScale()",
+    "IChartApi.priceScale(priceScaleId)",
+    "IChartApi.applyOptions(options)",
+    "IChartApi.subscribeClick(handler)",
+    "IChartApi.subscribeCrosshairMove(handler)",
+    "IChartApi.takeScreenshot()",
+    "ISeriesApi.setData(data)",
+    "ISeriesApi.update(bar)",
+    "ISeriesApi.applyOptions(options)",
+    "ISeriesApi.priceScale()",
+    "ISeriesApi.attachPrimitive(primitive)",
+    "ITimeScaleApi.setVisibleRange(range)",
+    "ITimeScaleApi.setVisibleLogicalRange(range)",
+    "ITimeScaleApi.fitContent()",
+    "IPriceScaleApi.applyOptions(options)",
+    "IPaneApi.attachPrimitive(primitive)",
+    "LineSeries, AreaSeries, BarSeries, CandlestickSeries, BaselineSeries, HistogramSeries",
+    "createTextWatermark(pane, options)",
+    "createImageWatermark(pane, options)",
+    "createSeriesMarkers(series, markers)",
+    "createUpDownMarkers(series, options)",
+    "version()"
+  ]
+}

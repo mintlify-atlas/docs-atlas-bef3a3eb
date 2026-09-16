@@ -1,0 +1,385 @@
+---
+title: "ICustomSeriesPaneView: Custom Series Plugin Guide"
+sidebarTitle: "ICustomSeriesPaneView"
+description: "Build fully custom chart series in Lightweight Charts by implementing ICustomSeriesPaneView and ICustomSeriesPaneRenderer with canvas-based drawing and autoscaling."
+---
+
+The custom series API lets you build entirely new chart types by implementing two interfaces: `ICustomSeriesPaneView` (the view/controller) and `ICustomSeriesPaneRenderer` (the canvas painter). The library calls these at the right time during the render cycle, passes the preprocessed bar data, and handles autoscaling using the price values you provide. Your renderer receives a `CanvasRenderingTarget2D` from the [fancy-canvas](https://github.com/tradingview/fancy-canvas) library and a `PriceToCoordinateConverter` function.
+
+---
+
+## ICustomSeriesPaneView\<HorzScaleItem, TData, TOptions\>
+
+The main plugin interface you implement and pass to `chart.addCustomSeries()` or `pane.addCustomSeries()`.
+
+### renderer
+
+Returns the renderer instance. The same renderer object may be reused across draws; it is expected to hold state updated by `update()`.
+
+**Returns:** `ICustomSeriesPaneRenderer`
+
+---
+
+### update
+
+Called by the library whenever the series data or options change, before the next paint. Use this method to pre-process data and store it on the renderer so `draw()` is fast.
+
+<ParamField body="data" type="PaneRendererCustomData<HorzScaleItem, TData>" required>
+  Pre-processed render data for all visible bars.
+  <Expandable title="PaneRendererCustomData fields">
+    <ResponseField name="bars" type="readonly CustomBarItemData[]">
+      Array of all data items with their computed X-coordinate and original data.
+    </ResponseField>
+    <ResponseField name="barSpacing" type="number">
+      Pixel spacing between consecutive bar centers at the current zoom level.
+    </ResponseField>
+    <ResponseField name="visibleRange" type="IRange<number> | null">
+      The slice of `bars` currently visible on screen (as start/end indices).
+    </ResponseField>
+    <ResponseField name="conflationFactor" type="number">
+      How many source data points were merged into each displayed point. The effective bar spacing for non-continuous series is `conflationFactor * barSpacing`.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="seriesOptions" type="TOptions" required>
+  The current fully-resolved series options.
+</ParamField>
+
+---
+
+### priceValueBuilder
+
+Returns an array of price values for a single data row. The library uses these values to drive autoscaling and crosshair positioning. The **last value** in the array is treated as the "current" price.
+
+You generally need at most three values: smallest, largest, and current.
+
+<ParamField body="plotRow" type="TData" required>
+  The original user-supplied data item.
+</ParamField>
+
+**Returns:** `CustomSeriesPricePlotValues` (`number[]`)
+
+```typescript
+// Line-like series: single current value
+priceValueBuilder(row: MyData) {
+  return [row.value];
+}
+
+// OHLC-like series: high, low, close
+priceValueBuilder(row: MyData) {
+  return [row.high, row.low, row.close];
+}
+```
+
+---
+
+### isWhitespace
+
+Returns `true` if the given data point should be treated as a gap (whitespace), i.e. it has a time but no renderable value.
+
+<ParamField body="data" type="TData | CustomSeriesWhitespaceData<HorzScaleItem>" required>
+  The data point to test.
+</ParamField>
+
+**Returns:** `boolean`
+
+```typescript
+isWhitespace(data: MyData | CustomSeriesWhitespaceData) {
+  return (data as MyData).value === undefined;
+}
+```
+
+---
+
+### defaultOptions
+
+Returns the default options object for the series. The library merges user-supplied options on top of these defaults.
+
+**Returns:** `TOptions`
+
+```typescript
+defaultOptions() {
+  return {
+    ...customSeriesDefaultOptions, // base defaults from the library
+    color: '#2962ff',
+    barWidth: 0.6,
+  };
+}
+```
+
+---
+
+### destroy (optional)
+
+Called when the series is removed from the chart. Clean up event listeners, timers, and any external references here to prevent memory leaks.
+
+---
+
+### conflationReducer (optional)
+
+A custom reducer invoked when two adjacent data points must be combined into one (e.g. when zoomed out). If not provided, the library uses a simple last-value strategy.
+
+<ParamField body="item1" type="CustomConflationContext<HorzScaleItem, TData>" required>
+  Context wrapper around the first data point.
+</ParamField>
+
+<ParamField body="item2" type="CustomConflationContext<HorzScaleItem, TData>" required>
+  Context wrapper around the second data point.
+</ParamField>
+
+**Returns:** `TData`
+
+---
+
+## ICustomSeriesPaneRenderer
+
+The renderer is responsible for painting on the canvas. It receives a `CanvasRenderingTarget2D` which provides two coordinate-space helpers from the fancy-canvas library.
+
+### draw
+
+Called each frame when the series needs to be painted.
+
+<ParamField body="target" type="CanvasRenderingTarget2D" required>
+  The canvas rendering target. Use `target.useBitmapCoordinateSpace()` for pixel-perfect drawing (respects device pixel ratio) or `target.useMediaCoordinateSpace()` for CSS-pixel drawing.
+</ParamField>
+
+<ParamField body="priceConverter" type="PriceToCoordinateConverter" required>
+  A function `(price: number) => Coordinate | null` that converts price values to canvas Y-coordinates. Returns the same values as `series.priceToCoordinate()`.
+</ParamField>
+
+<ParamField body="isHovered" type="boolean" required>
+  Whether the series is currently hovered by the cursor. Use to render hover states.
+</ParamField>
+
+<ParamField body="hitTestData" type="unknown">
+  Optional data returned from the `hitTest` method of a previous frame, used to identify what was hovered.
+</ParamField>
+
+---
+
+### hitTest (optional)
+
+Called on cursor movement to perform hit testing for interactive series. Return a `CustomSeriesHitTestResult` if the cursor is within the series, or `null` otherwise.
+
+<ParamField body="x" type="Coordinate" required>Cursor X coordinate.</ParamField>
+<ParamField body="y" type="Coordinate" required>Cursor Y coordinate.</ParamField>
+<ParamField body="priceConverter" type="PriceToCoordinateConverter" required>Price-to-coordinate converter.</ParamField>
+
+**Returns:** `CustomSeriesHitTestResult | null`
+
+<ResponseField name="CustomSeriesHitTestResult" type="object">
+  <Expandable title="Fields">
+    <ResponseField name="distance" type="number" required>
+      Distance in CSS pixels from the cursor to the hit geometry. Lower values win in hit priority comparisons.
+    </ResponseField>
+    <ResponseField name="objectId" type="string">
+      Optional identifier for the specific hovered object, accessible in `crosshairMoved` and `click` events.
+    </ResponseField>
+    <ResponseField name="type" type='"point" | "line" | "range" | "custom"'>
+      Geometric classification for internal hit comparison. Does not affect the public event `hoveredInfo.type`.
+    </ResponseField>
+    <ResponseField name="cursorStyle" type="string">
+      Optional CSS cursor override (e.g. `'pointer'`, `'crosshair'`).
+    </ResponseField>
+    <ResponseField name="hitTestData" type="unknown">
+      Arbitrary data passed back into `draw()` when this object is hovered.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## CustomBarItemData
+
+The per-bar data object provided within `PaneRendererCustomData.bars`.
+
+<ResponseField name="x" type="number">
+  Horizontal canvas coordinate of the bar's center in pixels, measured from the left edge of the pane.
+</ResponseField>
+
+<ResponseField name="time" type="number">
+  The logical index (bar number) of this item in the time scale. This is not a timestamp.
+</ResponseField>
+
+<ResponseField name="originalData" type="TData">
+  The original data item as supplied by the user via `setData` or `update`.
+</ResponseField>
+
+<ResponseField name="barColor" type="string">
+  The computed color for this bar, used for the price line and price scale label. Derived from `CustomData.color` if set, otherwise from the series options.
+</ResponseField>
+
+---
+
+## Full Example
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import {
+      createChart,
+      customSeriesDefaultOptions,
+      LineSeries,
+    } from 'lightweight-charts';
+    import type {
+      ICustomSeriesPaneView,
+      ICustomSeriesPaneRenderer,
+      CustomData,
+      PaneRendererCustomData,
+      PriceToCoordinateConverter,
+      CustomSeriesOptions,
+    } from 'lightweight-charts';
+
+    // 1. Define your data shape
+    interface RangeBarData extends CustomData {
+      time: string;
+      high: number;
+      low: number;
+    }
+
+    // 2. Define your options
+    interface RangeBarOptions extends CustomSeriesOptions {
+      upColor: string;
+      downColor: string;
+    }
+
+    // 3. Implement the renderer
+    class RangeBarRenderer implements ICustomSeriesPaneRenderer {
+      private _data: PaneRendererCustomData<string, RangeBarData> | null = null;
+      private _options: RangeBarOptions | null = null;
+
+      update(
+        data: PaneRendererCustomData<string, RangeBarData>,
+        options: RangeBarOptions
+      ) {
+        this._data = data;
+        this._options = options;
+      }
+
+      draw(target, priceConverter: PriceToCoordinateConverter) {
+        if (!this._data || !this._options) return;
+        const { bars, barSpacing, visibleRange } = this._data;
+        if (!visibleRange) return;
+
+        target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio, verticalPixelRatio }) => {
+          const barW = Math.max(1, Math.floor(barSpacing * 0.6 * horizontalPixelRatio));
+
+          for (let i = visibleRange.from; i <= visibleRange.to; i++) {
+            const bar = bars[i];
+            const yHigh = priceConverter(bar.originalData.high);
+            const yLow = priceConverter(bar.originalData.low);
+            if (yHigh === null || yLow === null) continue;
+
+            const x = Math.round(bar.x * horizontalPixelRatio);
+            const top = Math.round(yHigh * verticalPixelRatio);
+            const bottom = Math.round(yLow * verticalPixelRatio);
+
+            ctx.fillStyle = this._options!.upColor;
+            ctx.fillRect(x - barW / 2, top, barW, bottom - top);
+          }
+        });
+      }
+    }
+
+    // 4. Implement the view
+    class RangeBarView implements ICustomSeriesPaneView<string, RangeBarData, RangeBarOptions> {
+      private _renderer = new RangeBarRenderer();
+
+      renderer() { return this._renderer; }
+
+      update(data: PaneRendererCustomData<string, RangeBarData>, options: RangeBarOptions) {
+        this._renderer.update(data, options);
+      }
+
+      defaultOptions(): RangeBarOptions {
+        return {
+          ...customSeriesDefaultOptions,
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+        };
+      }
+
+      priceValueBuilder(row: RangeBarData) {
+        return [row.low, row.high, row.high]; // min, max, current
+      }
+
+      isWhitespace(data: RangeBarData | { time: string }) {
+        return (data as RangeBarData).high === undefined;
+      }
+    }
+
+    // 5. Add to chart
+    const chart = createChart(document.getElementById('chart')!);
+    const series = chart.addCustomSeries(new RangeBarView(), {
+      upColor: '#26a69a',
+    });
+
+    series.setData([
+      { time: '2024-01-01', high: 110, low: 100 },
+      { time: '2024-01-02', high: 115, low: 105 },
+      { time: '2024-01-03', high: 112, low: 103 },
+    ]);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const { createChart, customSeriesDefaultOptions } = LightweightCharts;
+
+    class RangeBarRenderer {
+      update(data, options) {
+        this._data = data;
+        this._options = options;
+      }
+
+      draw(target, priceConverter) {
+        if (!this._data) return;
+        const { bars, barSpacing, visibleRange } = this._data;
+        if (!visibleRange) return;
+
+        target.useBitmapCoordinateSpace(({ context, horizontalPixelRatio, verticalPixelRatio }) => {
+          const barW = Math.max(1, Math.floor(barSpacing * 0.6 * horizontalPixelRatio));
+
+          for (let i = visibleRange.from; i <= visibleRange.to; i++) {
+            const bar = bars[i];
+            const yHigh = priceConverter(bar.originalData.high);
+            const yLow = priceConverter(bar.originalData.low);
+            if (yHigh === null || yLow === null) continue;
+
+            const x = Math.round(bar.x * horizontalPixelRatio);
+            context.fillStyle = this._options.upColor;
+            context.fillRect(
+              x - barW / 2,
+              Math.round(yHigh * verticalPixelRatio),
+              barW,
+              Math.round((yLow - yHigh) * verticalPixelRatio)
+            );
+          }
+        });
+      }
+    }
+
+    class RangeBarView {
+      constructor() { this._renderer = new RangeBarRenderer(); }
+      renderer() { return this._renderer; }
+      update(data, options) { this._renderer.update(data, options); }
+      defaultOptions() {
+        return { ...customSeriesDefaultOptions, upColor: '#26a69a', downColor: '#ef5350' };
+      }
+      priceValueBuilder(row) { return [row.low, row.high, row.high]; }
+      isWhitespace(data) { return data.high === undefined; }
+    }
+
+    const chart = createChart(document.getElementById('chart'));
+    const series = chart.addCustomSeries(new RangeBarView());
+    series.setData([
+      { time: '2024-01-01', high: 110, low: 100 },
+      { time: '2024-01-02', high: 115, low: 105 },
+    ]);
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Use `target.useBitmapCoordinateSpace()` for pixel-perfect rendering that respects the device pixel ratio. Use `target.useMediaCoordinateSpace()` when you want to work in CSS pixels for simpler math (e.g., text overlays).
+</Tip>

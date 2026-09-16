@@ -1,0 +1,330 @@
+---
+title: "Lightweight Charts Series Types: Complete Guide"
+sidebarTitle: "Series Types"
+description: "Explore all six built-in series types — Line, Area, Bar, Candlestick, Baseline, and Histogram — with data formats, style options, and v5 code examples."
+---
+
+Lightweight Charts ships with six built-in series types covering the most common financial chart visualizations. Every series is created via `chart.addSeries()`, passing a **series definition** imported directly from the library alongside any initial style options. Series can be customized at creation time or updated dynamically using `applyOptions()`.
+
+<Note>
+All examples use the **v5 API** where series definitions are imported as named exports (e.g. `LineSeries`, `CandlestickSeries`) and passed as the first argument to `chart.addSeries()`.
+</Note>
+
+## Series Overview
+
+<CardGroup cols={3}>
+  <Card title="Line" icon="chart-line">
+    Connects data points with straight segments. Best for simple price or indicator trends.
+  </Card>
+  <Card title="Area" icon="chart-area">
+    Fills the region below the line. Great for highlighting magnitude over time.
+  </Card>
+  <Card title="Bar" icon="chart-bar">
+    OHLC bars with open/close tick marks. Traditional choice for OHLC data.
+  </Card>
+  <Card title="Candlestick" icon="candle-holder">
+    Solid bodies with wicks. The industry-standard view for OHLC price action.
+  </Card>
+  <Card title="Baseline" icon="equals">
+    Two-color fill split at a reference value. Ideal for relative performance.
+  </Card>
+  <Card title="Histogram" icon="chart-column">
+    Vertical columns with optional per-bar colors. Commonly used for volume.
+  </Card>
+</CardGroup>
+
+---
+
+## Line Series
+
+The Line series connects each data point with a straight segment, making it the simplest and most versatile series type. It is well suited for price data, moving averages, and any continuously sampled indicator.
+
+- **Series Definition**: `LineSeries`
+- **Data format**: `SingleValueData` — `{ time, value }` — or `WhitespaceData`
+- **Style options**: `SeriesOptionsCommon` + `LineStyleOptions`
+
+```typescript
+import { createChart, LineSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+const lineSeries = chart.addSeries(LineSeries, {
+  color: '#2962ff',
+  lineWidth: 2,
+});
+
+lineSeries.setData([
+  { time: '2024-01-01', value: 100 },
+  { time: '2024-01-02', value: 105 },
+  { time: '2024-01-03', value: 98  },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Accordion title="Key LineStyleOptions">
+| Option | Type | Description |
+|---|---|---|
+| `color` | `string` | Line color |
+| `lineWidth` | `1 \| 2 \| 3 \| 4` | Stroke width in pixels |
+| `lineStyle` | `LineStyle` | Solid, dotted, dashed, etc. |
+| `crosshairMarkerVisible` | `boolean` | Show dot on crosshair |
+| `lastValueVisible` | `boolean` | Show label on price scale |
+| `priceLineVisible` | `boolean` | Show horizontal price line |
+</Accordion>
+
+---
+
+## Area Series
+
+The Area series draws a filled region between the line connecting all data points and the time scale. It is visually impactful for showing cumulative growth or portfolio value over time.
+
+- **Series Definition**: `AreaSeries`
+- **Data format**: `SingleValueData` — `{ time, value }` — or `WhitespaceData`
+- **Style options**: `SeriesOptionsCommon` + `AreaStyleOptions`
+
+```typescript
+import { createChart, AreaSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+const areaSeries = chart.addSeries(AreaSeries, {
+  lineColor: '#2962ff',
+  topColor: 'rgba(41, 98, 255, 0.4)',
+  bottomColor: 'rgba(41, 98, 255, 0.0)',
+});
+
+areaSeries.setData([
+  { time: '2024-01-01', value: 100 },
+  { time: '2024-01-02', value: 108 },
+  { time: '2024-01-03', value: 103 },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Accordion title="Key AreaStyleOptions">
+| Option | Type | Description |
+|---|---|---|
+| `lineColor` | `string` | Color of the connecting line |
+| `topColor` | `string` | Gradient fill color at the top |
+| `bottomColor` | `string` | Gradient fill color at the bottom |
+| `lineWidth` | `1 \| 2 \| 3 \| 4` | Stroke width |
+| `invertFilledArea` | `boolean` | Fill above the line instead of below |
+</Accordion>
+
+---
+
+## Bar Series
+
+The Bar series renders traditional OHLC bars. Each bar spans from the low to the high price with small horizontal tick marks indicating the open (left) and close (right) values.
+
+- **Series Definition**: `BarSeries`
+- **Data format**: `BarData` — `{ time, open, high, low, close }` — or `WhitespaceData`
+- **Style options**: `SeriesOptionsCommon` + `BarStyleOptions`
+
+```typescript
+import { createChart, BarSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+const barSeries = chart.addSeries(BarSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+});
+
+barSeries.setData([
+  { time: '2024-01-01', open: 100, high: 106, low: 97,  close: 104 },
+  { time: '2024-01-02', open: 104, high: 110, low: 102, close: 107 },
+  { time: '2024-01-03', open: 107, high: 108, low: 99,  close: 101 },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Accordion title="Key BarStyleOptions">
+| Option | Type | Description |
+|---|---|---|
+| `upColor` | `string` | Bar color when close ≥ open |
+| `downColor` | `string` | Bar color when close < open |
+| `openVisible` | `boolean` | Show the open tick mark |
+| `thinBars` | `boolean` | Render thinner bars |
+</Accordion>
+
+---
+
+## Candlestick Series
+
+The Candlestick series is the most widely used format for financial price data. Each candle has a solid body representing the open–close range and wicks showing the high and low extremes.
+
+- **Series Definition**: `CandlestickSeries`
+- **Data format**: `BarData` — `{ time, open, high, low, close }` — or `WhitespaceData`
+- **Style options**: `SeriesOptionsCommon` + `CandlestickStyleOptions`
+
+```typescript
+import { createChart, CandlestickSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+const candlestickSeries = chart.addSeries(CandlestickSeries, {
+  upColor: '#26a69a',
+  downColor: '#ef5350',
+  borderVisible: false,
+  wickUpColor: '#26a69a',
+  wickDownColor: '#ef5350',
+});
+
+candlestickSeries.setData([
+  { time: '2024-01-01', open: 100, high: 106, low: 97,  close: 104 },
+  { time: '2024-01-02', open: 104, high: 110, low: 102, close: 107 },
+  { time: '2024-01-03', open: 107, high: 108, low: 99,  close: 101 },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Accordion title="Key CandlestickStyleOptions">
+| Option | Type | Description |
+|---|---|---|
+| `upColor` | `string` | Body color when close ≥ open (bullish) |
+| `downColor` | `string` | Body color when close < open (bearish) |
+| `borderVisible` | `boolean` | Show border around body |
+| `borderUpColor` | `string` | Border color for bullish candles |
+| `borderDownColor` | `string` | Border color for bearish candles |
+| `wickUpColor` | `string` | Wick color for bullish candles |
+| `wickDownColor` | `string` | Wick color for bearish candles |
+| `wickVisible` | `boolean` | Show or hide wicks |
+</Accordion>
+
+<Tip>
+Setting `borderVisible: false` and matching `wickUpColor`/`wickDownColor` to the respective body colors gives a clean, modern candlestick appearance.
+</Tip>
+
+---
+
+## Baseline Series
+
+The Baseline series draws a single-value line but fills the area above and below a configurable base value with different colors. It is ideal for showing whether a value is above or below a threshold (e.g., a benchmark return).
+
+- **Series Definition**: `BaselineSeries`
+- **Data format**: `SingleValueData` — `{ time, value }` — or `WhitespaceData`
+- **Style options**: `SeriesOptionsCommon` + `BaselineStyleOptions`
+
+```typescript
+import { createChart, BaselineSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+const baselineSeries = chart.addSeries(BaselineSeries, {
+  baseValue: { type: 'price', price: 100 },
+  topLineColor: '#26a69a',
+  topFillColor1: 'rgba(38, 166, 154, 0.28)',
+  topFillColor2: 'rgba(38, 166, 154, 0.05)',
+  bottomLineColor: '#ef5350',
+  bottomFillColor1: 'rgba(239, 83, 80, 0.05)',
+  bottomFillColor2: 'rgba(239, 83, 80, 0.28)',
+});
+
+baselineSeries.setData([
+  { time: '2024-01-01', value: 95  },
+  { time: '2024-01-02', value: 103 },
+  { time: '2024-01-03', value: 98  },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Accordion title="Key BaselineStyleOptions">
+| Option | Type | Description |
+|---|---|---|
+| `baseValue` | `BaseValuePrice` | The reference price splitting top/bottom areas |
+| `topLineColor` | `string` | Line color above the base |
+| `topFillColor1` | `string` | Fill gradient top (above base) |
+| `topFillColor2` | `string` | Fill gradient bottom (above base) |
+| `bottomLineColor` | `string` | Line color below the base |
+| `bottomFillColor1` | `string` | Fill gradient top (below base) |
+| `bottomFillColor2` | `string` | Fill gradient bottom (below base) |
+</Accordion>
+
+---
+
+## Histogram Series
+
+The Histogram series renders data as vertical columns from a configurable base value. It supports per-bar color overrides via the `color` field on individual data items, making it perfect for volume indicators where up/down bars should differ in color.
+
+- **Series Definition**: `HistogramSeries`
+- **Data format**: `HistogramData` — `{ time, value, color? }` — or `WhitespaceData`
+- **Style options**: `SeriesOptionsCommon` + `HistogramStyleOptions`
+
+```typescript
+import { createChart, HistogramSeries } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+const histogramSeries = chart.addSeries(HistogramSeries, {
+  color: '#26a69a',
+  base: 0,
+});
+
+histogramSeries.setData([
+  { time: '2024-01-01', value: 1200000 },
+  { time: '2024-01-02', value: 1850000, color: '#ef5350' }, // per-bar color override
+  { time: '2024-01-03', value: 980000  },
+]);
+
+chart.timeScale().fitContent();
+```
+
+<Accordion title="Key HistogramStyleOptions">
+| Option | Type | Description |
+|---|---|---|
+| `color` | `string` | Default column color |
+| `base` | `number` | Price level columns extend from |
+</Accordion>
+
+<Info>
+The `color` field on individual `HistogramData` items overrides the series-level `color` option for that specific bar. This is commonly used to color volume bars based on the corresponding price candle direction.
+</Info>
+
+---
+
+## Customization
+
+All series share common options from `SeriesOptionsCommon` in addition to their type-specific style options.
+
+<Tabs>
+  <Tab title="At Creation">
+    ```typescript
+    // Pass initial options as the second argument to addSeries()
+    const series = chart.addSeries(AreaSeries, {
+      topColor: 'rgba(41, 98, 255, 0.4)',
+      bottomColor: 'rgba(41, 98, 255, 0.0)',
+      lineColor: '#2962ff',
+    });
+    ```
+  </Tab>
+  <Tab title="On the Fly">
+    ```typescript
+    // Use applyOptions() to update any options after creation
+    candlestickSeries.applyOptions({
+      upColor: '#4caf50',
+      downColor: '#f44336',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Custom Series (Plugins)
+
+For visualizations beyond the built-in types, Lightweight Charts supports **custom series** via a plugin system. Implement the `ICustomSeriesPaneView` interface to define your own rendering logic, then add the series to any chart instance using `chart.addCustomSeries()`.
+
+```typescript
+import { createChart } from 'lightweight-charts';
+
+const chart = createChart(document.getElementById('container'));
+
+// myCustomPaneView implements ICustomSeriesPaneView
+const customSeries = chart.addCustomSeries(myCustomPaneView, {
+  // custom series options
+});
+```
+
+<Tip>
+Custom series function identically to built-in series once created — they support `setData()`, `update()`, `applyOptions()`, and all other `ISeriesApi` methods. See the [Plugin Development](/plugins/overview) section for a complete walkthrough.
+</Tip>

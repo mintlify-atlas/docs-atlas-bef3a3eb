@@ -1,0 +1,232 @@
+---
+title: "Custom Series: Define New Chart Types in Lightweight Charts"
+sidebarTitle: "Custom Series"
+description: "Create entirely new series types with custom data structures, rendering logic, and options that integrate with the standard Lightweight Charts series API."
+---
+
+A custom series lets you define a brand-new chart type — complete with its own data schema, rendering logic, and options — while integrating with the same `ISeriesApi` interface used by built-in series. Once added, you manage it with the same `setData()`, `update()`, and `applyOptions()` calls you already know. Custom series are the right choice when you need to visualize data in a way that no built-in series supports: heatmaps, range bands, OHLCV variants, volume profiles, and similar custom chart types. If you only need to decorate an existing series without changing its data model, use a [series primitive](/plugins/series-primitives) instead.
+
+## Adding a custom series
+
+A custom series is defined by implementing the `ICustomSeriesPaneView` interface. Pass an instance to `chart.addCustomSeries()`, then work with the returned series handle just like any other series:
+
+```typescript
+import { createChart, customSeriesDefaultOptions } from 'lightweight-charts';
+
+class MyCustomSeries {
+  renderer(): MyRenderer {
+    return new MyRenderer();
+  }
+
+  update(data: PaneRendererCustomData<Time, MyData>, options: MyOptions): void {
+    // cache data and options for the renderer
+  }
+
+  defaultOptions(): MyOptions {
+    return {
+      ...customSeriesDefaultOptions,
+      customOption: 10,
+    };
+  }
+
+  priceValueBuilder(plotRow: MyData): number[] {
+    return [plotRow.value];
+  }
+
+  isWhitespace(data: MyData | CustomSeriesWhitespaceData): data is CustomSeriesWhitespaceData {
+    return (data as MyData).value === undefined;
+  }
+}
+
+const chart = createChart(document.getElementById('container')!);
+const customSeries = chart.addCustomSeries(new MyCustomSeries(), {
+  customOption: 42,
+});
+
+customSeries.setData([
+  { time: '2024-01-01', value: 100, customValue: 50 },
+  { time: '2024-01-02', value: 110, customValue: 60 },
+]);
+```
+
+<Note>
+  Custom series expect uniform bar widths across all data points. This ensures layout consistency when the user zooms and scrolls.
+</Note>
+
+## Removing a custom series
+
+Remove a custom series the same way you remove any built-in series:
+
+```typescript
+chart.removeSeries(customSeries);
+```
+
+Removal triggers the optional `destroy()` method on your `ICustomSeriesPaneView` implementation, giving you a chance to clean up any resources.
+
+## The `ICustomSeriesPaneView` interface
+
+This interface is the contract your custom series class must fulfill. The sections below cover each member in detail.
+
+### `renderer()`
+
+Returns a renderer object that implements `ICustomSeriesPaneRenderer`. The library holds this reference and calls its `draw()` method whenever the chart repaints. The renderer should read from whatever state was last set by `update()`:
+
+```typescript
+class MyRenderer implements ICustomSeriesPaneRenderer {
+  private _data: PaneRendererCustomData<Time, MyData> | null = null;
+
+  setData(data: PaneRendererCustomData<Time, MyData>): void {
+    this._data = data;
+  }
+
+  draw(
+    target: CanvasRenderingTarget2D,
+    priceConverter: PriceToCoordinateConverter,
+  ): void {
+    if (!this._data) return;
+
+    target.useBitmapCoordinateSpace(({ context, bitmapSize, horizontalPixelRatio, verticalPixelRatio }) => {
+      for (const bar of this._data!.bars) {
+        const x = Math.round(bar.x * horizontalPixelRatio);
+        const y = priceConverter(bar.originalData.value);
+        if (y === null) continue;
+
+        const yBitmap = Math.round(y * verticalPixelRatio);
+        context.fillStyle = bar.barColor;
+        context.fillRect(x - 2, yBitmap - 2, 4, 4);
+      }
+    });
+  }
+}
+```
+
+<Tip>
+  The `priceConverter` function converts price values to **media** (CSS pixel) coordinates. Multiply the result by `verticalPixelRatio` when you are working inside `useBitmapCoordinateSpace`. See [Canvas rendering](/plugins/canvas-rendering) for details.
+</Tip>
+
+### `update(data, seriesOptions)`
+
+Called by the library with fresh data before every repaint. Cache the values so the renderer can access them during `draw()`:
+
+```typescript
+update(
+  data: PaneRendererCustomData<Time, MyData>,
+  seriesOptions: MyOptions,
+): void {
+  this._renderer.setData(data);
+  this._renderer.setOptions(seriesOptions);
+}
+```
+
+The `data` object provides:
+
+| Property | Description |
+|----------|-------------|
+| `bars` | Array of `CustomBarItemData` — each item has `x`, `time`, `originalData`, and `barColor` |
+| `barSpacing` | Pixel width allocated per bar in media coordinates |
+| `visibleRange` | Index range of bars currently on-screen, or `null` |
+| `conflationFactor` | How many source data points are merged into one bar (relevant when bars are zoomed out) |
+
+### `priceValueBuilder(plotRow)`
+
+Interprets a single data item and returns an array of numbers representing price values. The library uses these for auto-scaling, crosshair display, and the price line:
+
+```typescript
+priceValueBuilder(plotRow: MyData): number[] {
+  // For a simple value series:
+  return [plotRow.value];
+
+  // For a candle-like series (high, low, close):
+  // return [plotRow.high, plotRow.low, plotRow.close];
+}
+```
+
+The **last** value in the array is used as the current price (crosshair and price line). The **largest** and **smallest** values define the auto-scale range for that bar.
+
+### `isWhitespace(data)`
+
+A type guard that tells the library which data points are whitespace (gaps with no rendered bar). Whitespace items are excluded from `priceValueBuilder` and are not passed to the renderer:
+
+```typescript
+isWhitespace(
+  data: MyData | CustomSeriesWhitespaceData,
+): data is CustomSeriesWhitespaceData {
+  return (data as MyData).value === undefined;
+}
+```
+
+### `defaultOptions()`
+
+Returns the initial options object for the series. Spread `customSeriesDefaultOptions` to inherit the standard series option defaults, then add your own:
+
+```typescript
+defaultOptions(): MyOptions {
+  return {
+    ...customSeriesDefaultOptions,
+    barStyle: 'filled',
+    barWidth: 6,
+  };
+}
+```
+
+Users can override these at creation time via the second argument of `addCustomSeries()`, or later via `series.applyOptions()`.
+
+### `destroy()` (optional)
+
+Called when the series is removed from the chart. Release event listeners, timers, and object references to avoid memory leaks:
+
+```typescript
+destroy(): void {
+  this._worker?.terminate();
+  this._subscription?.unsubscribe();
+}
+```
+
+## Data constraints
+
+Your custom data type must extend the `CustomData` interface, which requires a valid `time` property. You can add any additional properties:
+
+```typescript
+interface MyData extends CustomData {
+  value: number;
+  customValue: number;
+  label?: string;
+}
+```
+
+<Warning>
+  Data points without a `time` property will be rejected by the library. Always extend `CustomData` (or `CustomSeriesWhitespaceData` for gap items) rather than writing a plain object type.
+</Warning>
+
+## Hit testing (optional)
+
+Your renderer can implement the optional `hitTest()` method to participate in hover and click resolution. Return `null` when the cursor misses your geometry, or a `CustomSeriesHitTestResult` on a hit:
+
+```typescript
+hitTest(
+  x: Coordinate,
+  y: Coordinate,
+  priceConverter: PriceToCoordinateConverter,
+): CustomSeriesHitTestResult | null {
+  for (const bar of this._data?.bars ?? []) {
+    const bx = bar.x;
+    const by = priceConverter(bar.originalData.value);
+    if (by === null) continue;
+
+    const dist = Math.hypot(x - bx, y - by);
+    if (dist < 6) {
+      return {
+        distance: dist,
+        objectId: `bar-${bar.time}`,
+        type: 'point',
+        cursorStyle: 'pointer',
+      };
+    }
+  }
+  return null;
+}
+```
+
+<Note>
+  The `type` field influences how the library resolves overlapping hits (geometry-first arbitration), but public mouse events always report `hoveredInfo.type` as `'custom'` for custom series. Use `objectId` and `hoveredInfo.objectKind` to distinguish between sub-objects.
+</Note>

@@ -1,0 +1,195 @@
+---
+title: "Installing Lightweight Charts: npm, CDN & Build Variants"
+sidebarTitle: "Installation"
+description: "All ways to install Lightweight Charts™ — npm, yarn, pnpm, CDN script tag, build variant reference, TypeScript config, ES2020 target, and Babel transpilation."
+---
+
+Lightweight Charts™ is distributed as the [`lightweight-charts`](https://www.npmjs.com/package/lightweight-charts) npm package and as a prebuilt standalone bundle on unpkg. This page covers every installation path, the available build variants, TypeScript configuration, and browser compatibility requirements.
+
+## Package Manager Installation
+
+Install the package using your preferred package manager:
+
+<CodeGroup>
+  ```bash npm
+  npm install lightweight-charts
+  ```
+
+  ```bash yarn
+  yarn add lightweight-charts
+  ```
+
+  ```bash pnpm
+  pnpm add lightweight-charts
+  ```
+</CodeGroup>
+
+Once installed, import `createChart` and the series types you need as named ES module imports:
+
+```typescript
+import { createChart, LineSeries, CandlestickSeries } from 'lightweight-charts';
+```
+
+## CDN / Standalone Build
+
+If you are not using a build tool, load Lightweight Charts directly from [unpkg](https://unpkg.com/). The **standalone** build bundles all dependencies (including `fancy-canvas`) into a single file and exposes everything on the global `window.LightweightCharts` object:
+
+```html
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+```
+
+Use it in your script without any imports:
+
+```html
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+  const { createChart, LineSeries } = LightweightCharts;
+
+  const chart = createChart(document.getElementById('container'), {
+    width: 800,
+    height: 400,
+  });
+
+  const series = chart.addSeries(LineSeries);
+  series.setData([
+    { time: '2024-01-01', value: 100 },
+    { time: '2024-01-02', value: 105 },
+  ]);
+
+  chart.timeScale().fitContent();
+</script>
+```
+
+<Warning>
+  The unversioned unpkg URL (`/lightweight-charts/dist/...`) always resolves to the latest release. Pin a specific version in production to avoid unexpected breaking changes:
+
+  ```
+  https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js
+  ```
+</Warning>
+
+## Build Variants
+
+The npm package ships multiple pre-compiled variants. Your bundler will automatically select the correct variant based on your `NODE_ENV`. If you are loading files manually (e.g., via `<script type="module">`) choose the appropriate file from the table below:
+
+| Dependencies included | Mode | ES module (`.mjs`) | IIFE (`window.LightweightCharts`) |
+|---|---|---|---|
+| No | PROD | `lightweight-charts.production.mjs` | N/A |
+| No | DEV | `lightweight-charts.development.mjs` | N/A |
+| Yes (standalone) | PROD | `lightweight-charts.standalone.production.mjs` | `lightweight-charts.standalone.production.js` |
+| Yes (standalone) | DEV | `lightweight-charts.standalone.development.mjs` | `lightweight-charts.standalone.development.js` |
+
+**When to use each variant:**
+
+- **No dependencies / PROD** — use this when your bundler handles the `fancy-canvas` peer dependency and you are building for production. This is what the `package.json` `"default"` export resolves to.
+- **No dependencies / DEV** — same as above but includes runtime warnings and assertions helpful during development.
+- **Standalone / PROD** — use this for CDN `<script>` tags in production, or when you want a single self-contained bundle.
+- **Standalone / DEV** — use this for CDN `<script>` tags during development; includes runtime warnings.
+
+<Tip>
+  The `"development"` export condition in `package.json` selects the DEV variant automatically when `NODE_ENV=development`, and the production variant otherwise. Most bundlers (Vite, webpack, Rollup) handle this automatically.
+</Tip>
+
+## TypeScript Setup
+
+The package ships bundled TypeScript declarations at `dist/typings.d.ts`. No additional `@types/` package is required — TypeScript will pick up the types automatically from the `"typings"` field in `package.json`.
+
+```typescript
+// Full type inference works out of the box
+import {
+  createChart,
+  IChartApi,
+  ISeriesApi,
+  LineSeries,
+  LineSeriesOptions,
+} from 'lightweight-charts';
+
+const chart: IChartApi = createChart(document.getElementById('container')!);
+const series: ISeriesApi<'Line'> = chart.addSeries(LineSeries);
+```
+
+Ensure your `tsconfig.json` targets **ES2020** or later, matching the library's compiled output:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true
+  }
+}
+```
+
+<Note>
+  The `moduleResolution: "bundler"` setting (TypeScript 5+) or `"node16"` / `"nodenext"` is recommended when consuming ES module packages. Using `"node"` resolution may cause issues with the `.mjs` exports.
+</Note>
+
+## Browser Compatibility
+
+The library's compiled code targets the **ES2020** language specification. All major evergreen browsers (Chrome, Firefox, Safari, Edge) shipped full ES2020 support in 2020 or earlier. Consult the [ES2020 compatibility table](https://compat-table.github.io/compat-table/es2016plus/) to verify your specific target environments.
+
+<Warning>
+  Lightweight Charts does **not** support Internet Explorer or other pre-ES2020 browsers without transpilation.
+</Warning>
+
+### Transpiling with Babel
+
+If you must target browsers that do not support ES2020 natively, configure Babel to transpile the `lightweight-charts` package in your build system. By default, most bundler configurations exclude `node_modules` from transpilation — you need to explicitly include this package.
+
+**Example — Babel `babel.config.js` with `@babel/preset-env`:**
+
+```javascript
+module.exports = {
+  presets: [
+    [
+      '@babel/preset-env',
+      {
+        targets: '> 0.5%, last 2 versions, not dead',
+        useBuiltIns: 'usage',
+        corejs: 3,
+      },
+    ],
+  ],
+};
+```
+
+**Example — Vite `vite.config.ts` opt-in transpilation:**
+
+```typescript
+import { defineConfig } from 'vite';
+import legacy from '@vitejs/plugin-legacy';
+
+export default defineConfig({
+  plugins: [
+    legacy({
+      targets: ['> 0.5%', 'last 2 versions'],
+      additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
+    }),
+  ],
+  optimizeDeps: {
+    include: ['lightweight-charts'],
+  },
+});
+```
+
+<Note>
+  If you encounter any transpilation issues, open a [GitHub issue](https://github.com/tradingview/lightweight-charts/issues) with details about your build setup and target environment.
+</Note>
+
+## Verifying the Installation
+
+After installing, run the following snippet in a browser context to confirm the library loaded correctly and log the current version:
+
+```typescript
+import { version } from 'lightweight-charts';
+
+console.log('Lightweight Charts version:', version());
+// e.g. "5.2.1"
+```
+
+## Next Steps
+
+- **[Quickstart](/quickstart)** — Create your first chart with a `LineSeries` and real data.
+- **[Introduction](/introduction)** — Overview of series types, chart types, and the plugin system.
+- **[API Reference](https://tradingview.github.io/lightweight-charts/docs/api)** — Full reference for every function, interface, and option.

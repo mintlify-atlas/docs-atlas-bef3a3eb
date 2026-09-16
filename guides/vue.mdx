@@ -1,0 +1,392 @@
+---
+title: "Using Lightweight Charts in a Vue 3 Application"
+sidebarTitle: "Vue Integration"
+description: "Integrate Lightweight Charts into Vue 3 using the Composition API, with onMounted/onUnmounted lifecycle hooks and reactivity pitfall solutions."
+---
+
+Lightweight Charts manipulates the DOM directly through a canvas element, which sits outside Vue's reactivity system. The recommended approach is to grab the container element with a template ref, create the chart in `onMounted`, and destroy it in `onUnmounted`. This page covers a complete working setup using Vue 3's Composition API with `<script setup>`, plus tips for avoiding common reactivity pitfalls.
+
+## Installation
+
+<Steps>
+
+### Install the package
+
+```bash
+npm install lightweight-charts
+```
+
+### Create a chart component
+
+Use `ref()` for the container element and plain variables (not reactive state) for the chart instance. The `onMounted` hook guarantees the DOM is ready before you call `createChart`.
+
+<Tabs>
+  <Tab title="TypeScript (script setup)">
+    ```vue
+    <script setup lang="ts">
+    import { ref, onMounted, onUnmounted } from 'vue';
+    import { createChart, LineSeries } from 'lightweight-charts';
+    import type { IChartApi } from 'lightweight-charts';
+
+    const containerRef = ref<HTMLDivElement | null>(null);
+    let chart: IChartApi | null = null;
+
+    onMounted(() => {
+      if (!containerRef.value) return;
+
+      chart = createChart(containerRef.value, {
+        width: containerRef.value.clientWidth,
+        height: 400,
+      });
+
+      const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+      series.setData([
+        { time: '2024-01-01', value: 100 },
+        { time: '2024-01-02', value: 105 },
+        { time: '2024-01-03', value: 98 },
+        { time: '2024-01-04', value: 112 },
+      ]);
+
+      chart.timeScale().fitContent();
+    });
+
+    onUnmounted(() => {
+      if (chart) {
+        chart.remove();
+        chart = null;
+      }
+    });
+    </script>
+
+    <template>
+      <div ref="containerRef" />
+    </template>
+    ```
+  </Tab>
+  <Tab title="JavaScript (script setup)">
+    ```vue
+    <script setup>
+    import { ref, onMounted, onUnmounted } from 'vue';
+    import { createChart, LineSeries } from 'lightweight-charts';
+
+    const containerRef = ref(null);
+    let chart = null;
+
+    onMounted(() => {
+      if (!containerRef.value) return;
+
+      chart = createChart(containerRef.value, {
+        width: containerRef.value.clientWidth,
+        height: 400,
+      });
+
+      const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+      series.setData([
+        { time: '2024-01-01', value: 100 },
+        { time: '2024-01-02', value: 105 },
+        { time: '2024-01-03', value: 98 },
+        { time: '2024-01-04', value: 112 },
+      ]);
+
+      chart.timeScale().fitContent();
+    });
+
+    onUnmounted(() => {
+      if (chart) {
+        chart.remove();
+        chart = null;
+      }
+    });
+    </script>
+
+    <template>
+      <div ref="containerRef" />
+    </template>
+    ```
+  </Tab>
+  <Tab title="Options API">
+    ```vue
+    <script>
+    import { createChart, LineSeries } from 'lightweight-charts';
+
+    export default {
+      name: 'ChartComponent',
+      data() {
+        return {
+          chart: null,
+        };
+      },
+      mounted() {
+        this.chart = createChart(this.$refs.container, {
+          width: this.$refs.container.clientWidth,
+          height: 400,
+        });
+
+        const series = this.chart.addSeries(LineSeries, { color: '#2962ff' });
+        series.setData([
+          { time: '2024-01-01', value: 100 },
+          { time: '2024-01-02', value: 105 },
+        ]);
+        this.chart.timeScale().fitContent();
+      },
+      beforeUnmount() {
+        if (this.chart) {
+          this.chart.remove();
+          this.chart = null;
+        }
+      },
+    };
+    </script>
+
+    <template>
+      <div ref="container" />
+    </template>
+    ```
+  </Tab>
+</Tabs>
+
+### Use the component in a parent
+
+```vue
+<script setup>
+import ChartComponent from './ChartComponent.vue';
+</script>
+
+<template>
+  <main>
+    <h1>Price Chart</h1>
+    <ChartComponent />
+  </main>
+</template>
+```
+
+</Steps>
+
+## Avoiding Vue reactivity issues
+
+Vue's reactivity system wraps plain objects in a `Proxy`. If you store a Lightweight Charts instance (such as `IChartApi` or `ISeriesApi`) inside a `ref()` or `reactive()`, Vue will recursively proxy every property and method — this breaks internal library state and causes hard-to-diagnose errors.
+
+<Warning>
+  Never store the chart or series instances inside `ref()`, `reactive()`, or `computed()`. Use plain `let` variables or `shallowRef` / `markRaw` instead.
+</Warning>
+
+<Tabs>
+  <Tab title="✅ Correct — plain variable">
+    ```typescript
+    // Plain let: Vue never touches this
+    let chart: IChartApi | null = null;
+
+    onMounted(() => {
+      chart = createChart(containerRef.value!, { height: 400 });
+    });
+    ```
+  </Tab>
+  <Tab title="✅ Correct — shallowRef">
+    ```typescript
+    import { shallowRef } from 'vue';
+    import type { IChartApi } from 'lightweight-charts';
+
+    // shallowRef only proxies the .value wrapper, not the object inside
+    const chart = shallowRef<IChartApi | null>(null);
+
+    onMounted(() => {
+      chart.value = createChart(containerRef.value!, { height: 400 });
+    });
+
+    onUnmounted(() => {
+      chart.value?.remove();
+      chart.value = null;
+    });
+    ```
+  </Tab>
+  <Tab title="✅ Correct — markRaw">
+    ```typescript
+    import { ref, markRaw } from 'vue';
+    import type { IChartApi } from 'lightweight-charts';
+
+    // markRaw tells Vue: never proxy this object
+    const chart = ref<IChartApi | null>(null);
+
+    onMounted(() => {
+      const instance = createChart(containerRef.value!, { height: 400 });
+      chart.value = markRaw(instance);
+    });
+    ```
+  </Tab>
+  <Tab title="❌ Incorrect — reactive ref">
+    ```typescript
+    // ❌ This wraps the chart in a Proxy — will break internal state
+    const chart = ref<IChartApi | null>(null);
+
+    onMounted(() => {
+      chart.value = createChart(containerRef.value!, { height: 400 });
+      // chart.value is now a Vue Proxy, not the real IChartApi
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Auto-resize with ResizeObserver
+
+Watch the container element for size changes and call `chart.resize()` to keep the canvas in sync:
+
+```vue
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue';
+import { createChart, LineSeries } from 'lightweight-charts';
+import type { IChartApi } from 'lightweight-charts';
+
+const containerRef = ref<HTMLDivElement | null>(null);
+let chart: IChartApi | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (!containerRef.value) return;
+
+  chart = createChart(containerRef.value, {
+    width: containerRef.value.clientWidth,
+    height: 400,
+  });
+
+  const series = chart.addSeries(LineSeries, { color: '#2962ff' });
+  series.setData([
+    { time: '2024-01-01', value: 100 },
+    { time: '2024-01-02', value: 105 },
+  ]);
+  chart.timeScale().fitContent();
+
+  resizeObserver = new ResizeObserver(entries => {
+    const { width, height } = entries[0].contentRect;
+    chart?.resize(width, height);
+  });
+
+  resizeObserver.observe(containerRef.value);
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  chart?.remove();
+  chart = null;
+});
+</script>
+
+<template>
+  <div ref="containerRef" style="width: 100%;" />
+</template>
+```
+
+<Tip>
+  Use the `autoSize: true` chart option to let Lightweight Charts manage its own `ResizeObserver` internally. This removes the need for the manual observer setup shown above.
+
+  ```typescript
+  chart = createChart(containerRef.value, {
+    autoSize: true,
+    height: 400,
+  });
+  ```
+</Tip>
+
+## Reacting to prop changes
+
+When you want the chart to update in response to new data passed as props, use `watch`:
+
+```vue
+<script setup lang="ts">
+import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { createChart, LineSeries } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+
+const props = defineProps<{
+  data: { time: string; value: number }[];
+  color?: string;
+}>();
+
+const containerRef = ref<HTMLDivElement | null>(null);
+let chart: IChartApi | null = null;
+let series: ISeriesApi<'Line'> | null = null;
+
+onMounted(() => {
+  if (!containerRef.value) return;
+  chart = createChart(containerRef.value, { autoSize: true, height: 400 });
+  series = chart.addSeries(LineSeries, { color: props.color ?? '#2962ff' });
+  series.setData(props.data);
+  chart.timeScale().fitContent();
+});
+
+// Re-set data whenever the prop changes
+watch(() => props.data, newData => {
+  series?.setData(newData);
+  chart?.timeScale().fitContent();
+});
+
+onUnmounted(() => {
+  chart?.remove();
+  chart = null;
+  series = null;
+});
+</script>
+
+<template>
+  <div ref="containerRef" />
+</template>
+```
+
+<Note>
+  Call `series.setData()` (not `series.update()`) when replacing the entire dataset. Use `series.update()` only to append or update the last bar in a real-time feed.
+</Note>
+
+## Providing the chart to child components
+
+For complex layouts where child components need access to the chart, provide it through Vue's `provide` / `inject` API using `markRaw` to prevent proxying:
+
+```vue
+<!-- ParentChart.vue -->
+<script setup lang="ts">
+import { ref, provide, markRaw, onMounted, onUnmounted } from 'vue';
+import { createChart } from 'lightweight-charts';
+import type { IChartApi } from 'lightweight-charts';
+
+const containerRef = ref<HTMLDivElement | null>(null);
+let chart: IChartApi | null = null;
+
+const chartProvide = ref<IChartApi | null>(null);
+provide('chart', chartProvide);
+
+onMounted(() => {
+  if (!containerRef.value) return;
+  chart = createChart(containerRef.value, { autoSize: true, height: 400 });
+  // Expose via provide using markRaw so child inject() gets the real instance
+  chartProvide.value = markRaw(chart);
+});
+
+onUnmounted(() => {
+  chart?.remove();
+  chart = null;
+});
+</script>
+
+<template>
+  <div ref="containerRef">
+    <slot />
+  </div>
+</template>
+```
+
+```vue
+<!-- ChildSeries.vue -->
+<script setup lang="ts">
+import { inject, onMounted, watch, ref } from 'vue';
+import { LineSeries } from 'lightweight-charts';
+import type { IChartApi } from 'lightweight-charts';
+
+const chart = inject<ReturnType<typeof ref<IChartApi | null>>>('chart');
+
+onMounted(() => {
+  if (!chart?.value) return;
+  const series = chart.value.addSeries(LineSeries, { color: '#2962ff' });
+  series.setData([{ time: '2024-01-01', value: 100 }]);
+});
+</script>
+
+<template><slot /></template>
+```
