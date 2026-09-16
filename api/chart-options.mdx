@@ -1,5 +1,5 @@
 ---
-title: "ChartOptions: Complete Configuration Reference"
+title: "ChartOptions: Complete Chart Configuration Reference"
 sidebarTitle: "Chart Options"
 description: "All configurable properties of ChartOptions — layout, grid, crosshair, price scales, time scale, scroll/scale behavior, and responsive sizing."
 ---
@@ -113,6 +113,23 @@ All properties live under the `layout` key.
   <Note>
     This option must be set at chart creation time. Changing it via
     `applyOptions` after the chart has been created has no effect.
+  </Note>
+</ParamField>
+
+<ParamField path="layout.colorParsers" type="CustomColorParser[]" default="[]">
+  Array of custom color parser functions for handling color formats outside of
+  standard sRGB. Each parser receives a color string and must return either an
+  `[r, g, b, a]` array (values 0–255 for rgb, 0–1 for alpha) or `null` to pass
+  to the next parser. Parsers are tried in order.
+
+  The library already handles hex, `rgb()`, `rgba()`, `hsl()`, `hsla()`,
+  `hwb()`, named colors, and `transparent` by default. Custom parsers are only
+  needed for other color spaces such as `color(display-p3 r g b)`, `lab()`, or
+  `oklch()`.
+
+  <Note>
+    This option should only be specified at chart creation time and not changed
+    via `applyOptions`.
   </Note>
 </ParamField>
 
@@ -307,12 +324,6 @@ shape. An additional `overlayPriceScales` key controls defaults for overlay
 
 <ParamField path="rightPriceScale.tickMarkDensity" type="number" default="2.5">
   Controls label spacing. Higher values produce fewer, more spread-out labels.
-</ParamField>
-
-<ParamField path="defaultVisiblePriceScaleId" type='"left" | "right"' default='"right"'>
-  The preferred side when both scales share the same visibility state. Affects
-  grid-line generation, overlay label placement, and the default scale for new
-  series added without an explicit `priceScaleId`.
 </ParamField>
 
 ---

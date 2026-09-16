@@ -105,8 +105,9 @@ chart.timeScale().fitContent();
 | Option | Type | Description |
 |---|---|---|
 | `baseResolution` | `number` | Number of months represented by one logical bar unit. Increase to compress long-dated maturities. Default: `1` |
-| `minimumTimeRange` | `number` | Minimum number of months the visible range must span. Prevents over-zooming on sparse data. Default: `10` |
-| `startTimeRange` | `number` | Left-edge offset in months from the first data point. Default: `3` |
+| `minimumTimeRange` | `number` | Minimum number of baseResolution units the visible range must span. Prevents over-zooming on sparse data. Default: `120` (10 years when `baseResolution` is 1) |
+| `startTimeRange` | `number` | Starting time value for the chart in baseResolution units. Determines where the time scale begins. Default: `0` |
+| `formatTime` | `(months: number) => string` | Optional custom formatter for time values on the horizontal axis. If omitted, the built-in formatter is used. |
 </Accordion>
 
 <Tip>

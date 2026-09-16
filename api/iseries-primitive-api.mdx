@@ -1,7 +1,7 @@
 ---
 title: "ISeriesPrimitive: Series Plugin Interface Reference"
 sidebarTitle: "ISeriesPrimitive"
-description: "Build custom series overlays in Lightweight Charts by implementing ISeriesPrimitive — pane views, axis labels, autoscale expansion, hit testing, and lifecycle hooks."
+description: "Implement ISeriesPrimitive in Lightweight Charts to add pane views, axis labels, autoscale expansion, hit testing, and lifecycle hooks to any series."
 ---
 
 `ISeriesPrimitive` is the interface you implement when building a series-level plugin — a custom drawing overlay that is tightly coupled to a specific series instance. Primitives are attached with `series.attachPrimitive(primitive)` and detached with `series.detachPrimitive(primitive)`. The library calls the primitive's methods automatically during the render cycle whenever the chart redraws.

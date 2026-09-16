@@ -40,7 +40,7 @@ All examples use the **v5 API** where series definitions are imported as named e
 The Line series connects each data point with a straight segment, making it the simplest and most versatile series type. It is well suited for price data, moving averages, and any continuously sampled indicator.
 
 - **Series Definition**: `LineSeries`
-- **Data format**: `SingleValueData` — `{ time, value }` — or `WhitespaceData`
+- **Data format**: `LineData` — `{ time, value, color? }` — or `WhitespaceData`
 - **Style options**: `SeriesOptionsCommon` + `LineStyleOptions`
 
 ```typescript
@@ -79,7 +79,7 @@ chart.timeScale().fitContent();
 The Area series draws a filled region between the line connecting all data points and the time scale. It is visually impactful for showing cumulative growth or portfolio value over time.
 
 - **Series Definition**: `AreaSeries`
-- **Data format**: `SingleValueData` — `{ time, value }` — or `WhitespaceData`
+- **Data format**: `AreaData` — `{ time, value, lineColor?, topColor?, bottomColor? }` — or `WhitespaceData`
 - **Style options**: `SeriesOptionsCommon` + `AreaStyleOptions`
 
 ```typescript
@@ -118,7 +118,7 @@ chart.timeScale().fitContent();
 The Bar series renders traditional OHLC bars. Each bar spans from the low to the high price with small horizontal tick marks indicating the open (left) and close (right) values.
 
 - **Series Definition**: `BarSeries`
-- **Data format**: `BarData` — `{ time, open, high, low, close }` — or `WhitespaceData`
+- **Data format**: `BarData` — `{ time, open, high, low, close, color? }` — or `WhitespaceData`
 - **Style options**: `SeriesOptionsCommon` + `BarStyleOptions`
 
 ```typescript
@@ -155,7 +155,7 @@ chart.timeScale().fitContent();
 The Candlestick series is the most widely used format for financial price data. Each candle has a solid body representing the open–close range and wicks showing the high and low extremes.
 
 - **Series Definition**: `CandlestickSeries`
-- **Data format**: `BarData` — `{ time, open, high, low, close }` — or `WhitespaceData`
+- **Data format**: `CandlestickData` — `{ time, open, high, low, close, color?, borderColor?, wickColor? }` — or `WhitespaceData`
 - **Style options**: `SeriesOptionsCommon` + `CandlestickStyleOptions`
 
 ```typescript
@@ -203,7 +203,7 @@ Setting `borderVisible: false` and matching `wickUpColor`/`wickDownColor` to the
 The Baseline series draws a single-value line but fills the area above and below a configurable base value with different colors. It is ideal for showing whether a value is above or below a threshold (e.g., a benchmark return).
 
 - **Series Definition**: `BaselineSeries`
-- **Data format**: `SingleValueData` — `{ time, value }` — or `WhitespaceData`
+- **Data format**: `BaselineData` — `{ time, value, topFillColor1?, topFillColor2?, topLineColor?, bottomFillColor1?, bottomFillColor2?, bottomLineColor? }` — or `WhitespaceData`
 - **Style options**: `SeriesOptionsCommon` + `BaselineStyleOptions`
 
 ```typescript

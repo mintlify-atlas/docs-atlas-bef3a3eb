@@ -188,7 +188,7 @@ Extend the component to accept configuration as props for reuse:
 
 ```tsx
 import { useEffect, useRef } from 'react';
-import { createChart, LineSeries, IChartApi, LineSeriesPartialOptions } from 'lightweight-charts';
+import { createChart, LineSeries, IChartApi } from 'lightweight-charts';
 
 interface ChartProps {
   color?: string;
@@ -258,7 +258,7 @@ export const ChartContainer = forwardRef<IChartApi, { children: React.ReactNode 
 );
 
 // Child series component
-export function LineSeries({ color = '#2962ff' }) {
+export function LineSeriesComponent({ color = '#2962ff' }) {
   const chart = useContext(ChartContext);
   // ... use chart to add a series
 }

@@ -1,7 +1,7 @@
 ---
 title: "Canvas Rendering Target API for Lightweight Charts Plugins"
 sidebarTitle: "Canvas Rendering"
-description: "Master the CanvasRenderingTarget2D API used by all Lightweight Charts plugin renderers — bitmap vs. media coordinates, pixel-perfect tips, and context patterns."
+description: "Learn the CanvasRenderingTarget2D API for Lightweight Charts plugins — bitmap and media coordinate spaces, pixel-perfect tips, and context patterns."
 ---
 
 Every renderer in a Lightweight Charts plugin — whether it belongs to a custom series, a series primitive, or a pane primitive — receives a `CanvasRenderingTarget2D` instance as the entry point for all drawing. This object comes from the [Fancy Canvas](https://github.com/tradingview/fancy-canvas) library and wraps the browser's standard `CanvasRenderingContext2D` with two scoped coordinate spaces that handle device pixel ratio automatically. Understanding these two spaces and when to use each one is the key to writing crisp, performant plugin renderers.

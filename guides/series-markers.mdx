@@ -58,12 +58,13 @@ Each marker object supports the following fields:
 | Property | Type | Required | Description |
 |---|---|---|---|
 | `time` | `Time` | ✅ | The time value at which to draw the marker. Must match a data point in the series. |
-| `position` | `'aboveBar'` \| `'belowBar'` \| `'inBar'` | ✅ | Where to place the marker relative to the bar. |
+| `position` | `'aboveBar'` \| `'belowBar'` \| `'inBar'` \| `'atPriceTop'` \| `'atPriceBottom'` \| `'atPriceMiddle'` | ✅ | Where to place the marker relative to the bar or a specific price. |
 | `shape` | `'circle'` \| `'square'` \| `'arrowUp'` \| `'arrowDown'` | ✅ | The visual shape of the marker. |
 | `color` | `string` | ✅ | CSS color for the marker shape. |
 | `id` | `string` | — | Unique identifier used to detect which marker was clicked or hovered. |
 | `text` | `string` | — | Label displayed next to the marker. |
 | `size` | `number` | — | Scale factor for the marker size. Default is `1`. |
+| `price` | `number` | — | Exact price for Y-axis positioning. Required when `position` is `'atPriceTop'`, `'atPriceBottom'`, or `'atPriceMiddle'`. |
 
 ### Position reference
 
@@ -196,13 +197,13 @@ For strategies that need markers automatically assigned based on price direction
 import { createUpDownMarkers } from 'lightweight-charts';
 
 const upDownMarkers = createUpDownMarkers(series, {
-  upColor: '#26a69a',
-  downColor: '#ef5350',
+  positiveColor: '#26a69a',
+  negativeColor: '#ef5350',
 });
 ```
 
 <Tip>
-  `createUpDownMarkers` is best suited for automatically annotating every bar. For selective annotations at specific strategic points, use `createSeriesMarkers` with a hand-crafted markers array.
+  `createUpDownMarkers` only works with **Line** and **Area** series types. For selective annotations at specific strategic points on any series, use `createSeriesMarkers` with a hand-crafted markers array.
 </Tip>
 
 ## Complete example

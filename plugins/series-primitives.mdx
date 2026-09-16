@@ -101,8 +101,8 @@ The library calls specific getter methods on your primitive to collect views for
 Each pane view can specify a `zOrder` property that controls where in the visual stack it appears relative to the series, grid, and crosshair. The available values are:
 
 <Accordion title="PrimitivePaneViewZOrder values">
-  - `'bottom'` — drawn below the grid and all series
-  - `'normal'` — drawn above the series but below the crosshair (default)
+  - `'bottom'` — drawn below everything except the background
+  - `'normal'` — drawn at the same level as the series (default)
   - `'top'` — drawn above everything, including the crosshair
 </Accordion>
 

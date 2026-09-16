@@ -25,7 +25,6 @@ const textWatermark = createTextWatermark(pane, {
     {
       text: 'AAPL',
       fontSize: 48,
-      fontWeight: 'bold',
       fontStyle: 'italic',
       color: 'rgba(0, 0, 0, 0.15)',
     },
@@ -50,10 +49,9 @@ const textWatermark = createTextWatermark(pane, {
     {
       text: 'CONFIDENTIAL',
       fontSize: 36,
-      fontWeight: 'bold',
       fontFamily: 'monospace',
       color: 'rgba(239, 83, 80, 0.2)',
-      lineSpacing: 8,
+      lineHeight: 48,
     },
     {
       text: 'Internal use only',
@@ -73,6 +71,7 @@ const textWatermark = createTextWatermark(pane, {
 
 | Option | Type | Description |
 |---|---|---|
+| `visible` | `boolean` | Whether the watermark is visible. Default: `true`. |
 | `horzAlign` | `'left'` \| `'center'` \| `'right'` | Horizontal alignment of the watermark block. Default: `'center'`. |
 | `vertAlign` | `'top'` \| `'center'` \| `'bottom'` | Vertical alignment of the watermark block. Default: `'center'`. |
 | `lines` | `TextWatermarkLineOptions[]` | Array of line definitions. Each produces one rendered line of text. |
@@ -81,13 +80,12 @@ const textWatermark = createTextWatermark(pane, {
 
 | Option | Type | Description |
 |---|---|---|
-| `text` | `string` | The text to render. |
-| `fontSize` | `number` | Font size in pixels. |
+| `text` | `string` | The text to render. Default: `''`. |
+| `fontSize` | `number` | Font size in pixels. Default: `48`. |
+| `lineHeight` | `number` | Line height in pixels. Default: `1.2 * fontSize`. |
 | `fontFamily` | `string` | CSS font family string. |
-| `fontWeight` | `string` | CSS font weight (e.g. `'bold'`, `'400'`). |
-| `fontStyle` | `string` | CSS font style (e.g. `'italic'`, `'normal'`). |
-| `color` | `string` | CSS color string. Use `rgba()` for transparency. |
-| `lineSpacing` | `number` | Extra vertical spacing (pixels) below this line. |
+| `fontStyle` | `string` | CSS font style (e.g. `'italic'`, `'bold'`). Default: `''`. |
+| `color` | `string` | CSS color string. Use `rgba()` for transparency. Default: `'rgba(0, 0, 0, 0.5)'`. |
 
 </Accordion>
 
@@ -149,9 +147,9 @@ const imageWatermark = createImageWatermark(pane, '/logo.png', {
 
 </Accordion>
 
-### Using a programmatically created image
+### Extended image options example
 
-You can pass an image URL string directly. The library creates the `HTMLImageElement` for you:
+You can pass any URL (relative or absolute) as the second argument. The library creates the `HTMLImageElement` internally:
 
 ```typescript
 const imageWatermark = createImageWatermark(chart.panes()[0], '/images/brand-logo.svg', {
@@ -217,7 +215,6 @@ const ticker = createTextWatermark(pane, {
     {
       text: 'TSLA',
       fontSize: 64,
-      fontWeight: 'bold',
       color: 'rgba(0, 0, 0, 0.08)',
     },
     {

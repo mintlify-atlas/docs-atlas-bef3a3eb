@@ -1,5 +1,5 @@
 ---
-title: "ISeriesApi: Lightweight Charts Series Interface"
+title: "ISeriesApi: Lightweight Charts Series API Reference"
 sidebarTitle: "ISeriesApi"
 description: "Complete reference for ISeriesApi — manage data, options, price lines, primitives, coordinate conversion, and infinite scroll for any chart series type."
 ---
@@ -131,7 +131,7 @@ function onDataChanged(scope) {
   console.log('Data changed, scope:', scope);
 }
 series.subscribeDataChanged(onDataChanged);
-// Later:
+// Later, to unsubscribe:
 series.unsubscribeDataChanged(onDataChanged);
 ```
 

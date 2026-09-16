@@ -1,5 +1,5 @@
 ---
-title: "IChartApi Interface: Chart Methods and Events"
+title: "IChartApi: Chart Methods, Events, and Scale Access"
 sidebarTitle: "IChartApi"
 description: "Complete reference for the IChartApi interface — managing series, scales, panes, event subscriptions, crosshair control, and screenshot capture."
 ---
@@ -564,3 +564,23 @@ chart.remove();
   Always call `chart.remove()` when your component or page unmounts to prevent
   memory leaks. After calling `remove()`, the chart object must be discarded.
 </Warning>
+
+---
+
+### `horzBehaviour`
+
+Returns the horizontal scale behaviour strategy object associated with this
+chart instance. This is primarily useful for plugin and library authors who need
+direct access to the low-level horizontal scale implementation.
+
+```typescript
+horzBehaviour(): IHorzScaleBehavior<HorzScaleItem>
+```
+
+**Returns** `IHorzScaleBehavior<HorzScaleItem>` — the behavior object passed to
+`createChartEx`, or the built-in `HorzScaleBehaviorTime` instance for charts
+created with `createChart`.
+
+```typescript
+const behavior = chart.horzBehaviour();
+```

@@ -14,7 +14,10 @@ When the user moves the mouse over the chart, the library fires a `crosshairMove
 |---|---|---|
 | `param.point` | `{ x, y }` | Cursor position in pixels, relative to the chart's top-left corner. `undefined` when the cursor leaves the chart. |
 | `param.time` | `Time` \| `undefined` | The time value at the crosshair position. `undefined` when outside the data range. |
-| `param.seriesData` | `Map<ISeriesApi, DataPoint>` | A map from each series to its data at the current crosshair time. |
+| `param.logical` | `Logical` \| `undefined` | The logical index of the bar under the crosshair. |
+| `param.paneIndex` | `number` \| `undefined` | The index of the pane the crosshair is in. |
+| `param.seriesData` | `Map<ISeriesApi, BarData \| LineData \| HistogramData \| CustomData>` | A map from each series to its data point at the current crosshair time. |
+| `param.hoveredInfo` | `HoveredInfo` \| `undefined` | Information about the element under the cursor (series, marker, primitive, etc.). |
 
 ## Basic floating tooltip
 

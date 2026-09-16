@@ -1,7 +1,7 @@
 ---
-title: "ICustomSeriesPaneView: Custom Series Plugin Guide"
+title: "ICustomSeriesPaneView: Custom Series Plugin API Guide"
 sidebarTitle: "ICustomSeriesPaneView"
-description: "Build fully custom chart series in Lightweight Charts by implementing ICustomSeriesPaneView and ICustomSeriesPaneRenderer with canvas-based drawing and autoscaling."
+description: "Build custom chart types in Lightweight Charts by implementing ICustomSeriesPaneView and ICustomSeriesPaneRenderer with canvas drawing and autoscaling."
 ---
 
 The custom series API lets you build entirely new chart types by implementing two interfaces: `ICustomSeriesPaneView` (the view/controller) and `ICustomSeriesPaneRenderer` (the canvas painter). The library calls these at the right time during the render cycle, passes the preprocessed bar data, and handles autoscaling using the price values you provide. Your renderer receives a `CanvasRenderingTarget2D` from the [fancy-canvas](https://github.com/tradingview/fancy-canvas) library and a `PriceToCoordinateConverter` function.

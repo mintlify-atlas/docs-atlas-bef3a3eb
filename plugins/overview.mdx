@@ -1,5 +1,5 @@
 ---
-title: "Lightweight Charts Plugin System Overview Guide"
+title: "Lightweight Charts Plugins: Extension System Overview"
 sidebarTitle: "Overview"
 description: "Learn how to extend Lightweight Charts with custom series types, drawing tools, indicators, and watermarks using the three plugin types."
 ---
@@ -78,10 +78,10 @@ Lightweight Charts ships several ready-to-use plugin utilities in the main packa
     Attach to any pane via `chart.panes()[0]`. Supports per-line font size, weight, style, and color.
   </Card>
   <Card title="createImageWatermark" icon="image">
-    Renders an image element as a watermark on a pane.
+    Renders an image as a watermark on a pane from a URL string.
 
     ```typescript
-    createImageWatermark(pane, imageElement, options)
+    createImageWatermark(pane, imageUrl, options)
     ```
 
     Accepts `maxWidth`, `maxHeight`, `padding`, and `alpha` options to control layout and opacity.
